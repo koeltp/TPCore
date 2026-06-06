@@ -1,22 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+	<PropertyGroup>
+		<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 
-    <PackageId>Taipi.Core</PackageId>
-    <Version>1.0.3</Version>
-    <Authors>Taipi</Authors>
-    <Description>Taipi 基础类库，包含通用响应模型、扩展方法等</Description>
-    <PackageTags>taipi;response;models</PackageTags>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryType>git</RepositoryType>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>CS1591</NoWarn>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
-  <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
+		<PackageId>Taipi.Core</PackageId>
+		<Version>1.0.3</Version>
+		<Authors>Taipi</Authors>
+		<Description>Taipi 基础类库，包含通用响应模型、扩展方法等</Description>
+		<PackageTags>taipi;response;models</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>CS1591</NoWarn>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryType>git</RepositoryType>
+		<RepositoryUrl>https://github.com/koeltp/TPCore.git</RepositoryUrl>
+		<PackageProjectUrl>https://www.taipi.top</PackageProjectUrl>
+		<RepositoryBranch>main</RepositoryBranch>
+	</PropertyGroup>
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
 </Project>
