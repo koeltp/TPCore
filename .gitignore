@@ -1,0 +1,42 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+*.DotSettings
+*.sln.docstates
+*.userprefs
+
+# Node / Vue
+node_modules/
+dist/
+.happypack/
+*.log
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Environment
+*.env
+*.env.local
+
+# Logs
+*.log
+logs/
+
+appsettings.Development.json
+appsettings.Production.json
+
+Taipi.Core/
