@@ -230,7 +230,7 @@ dotnet add <项目> package Taipi.Core -s ./Taipi.Core/nupkg
 ### 推送到 NuGet 服务器
 
 ```bash
-dotnet nuget push ./nupkg/Taipi.Core.1.0.0.nupkg --api-key <你的API密钥> --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./nupkg/Taipi.Core.1.0.0.nupkg --api-key xxx --source https://api.nuget.org/v3/index.json
 ```
 
 发布新版本时先改 `Taipi.Core.csproj` 里的 `<Version>`，再重新打包推送。

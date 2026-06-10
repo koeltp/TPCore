@@ -6,7 +6,7 @@
 		<Nullable>enable</Nullable>
 
 		<PackageId>Taipi.Core</PackageId>
-		<Version>1.0.3</Version>
+		<Version>1.0.4</Version>
 		<Authors>Taipi</Authors>
 		<Description>Taipi 基础类库，包含通用响应模型、扩展方法等</Description>
 		<PackageTags>taipi;response;models</PackageTags>
