@@ -56,7 +56,7 @@ StatusResponseResult.InternalError();
 
 ### ResponseResult\<T\>
 
-带数据的响应结果。
+带数据的响应结果，成功时必须携带业务数据。
 
 ```csharp
 // 构造函数
@@ -65,8 +65,9 @@ new ResponseResult<ClientDto>(client);
 // 对象初始化器
 new ResponseResult<ClientDto> { Data = client, Message = "查询成功" };
 
-// 工厂方法（返回 ResponseResult<T>）
-ResponseResult<ClientDto>.Success("查询成功");
+// 工厂方法（成功时必须传数据）
+ResponseResult<ClientDto>.Success(client);
+ResponseResult<ClientDto>.Success(client, "查询成功");
 ResponseResult<ClientDto>.NotFound("客户未找到");
 ```
 
@@ -94,22 +95,24 @@ new PagerResponse<ClientDto>
 
 ### PagerResponseResult\<T\>
 
-带状态的分页响应结果。
+带状态的分页响应结果，成功时必须携带分页数据。
 
 ```csharp
 // 构造函数（自动构建 PagerResponse<T>）
 new PagerResponseResult<ClientDto>(items, pageIndex: 1, pageSize: 20, totalCount: 100);
 
-// 工厂方法
-PagerResponseResult<ClientDto>.Success("查询成功");
+// 工厂方法（成功时必须传分页数据）
+PagerResponseResult<ClientDto>.Success(items, pageIndex: 1, pageSize: 20, totalCount: 100);
+PagerResponseResult<ClientDto>.Success(items, pager, totalCount);
 PagerResponseResult<ClientDto>.NotFound("暂无数据");
 ```
 
 ### SummaryPagerResponse\<T1, T2\> / SummaryPagerResponseResult\<T1, T2\>
 
-带汇总数据的分页模型，适用于需要合计/统计行的场景。
+带汇总数据的分页模型，适用于需要合计/统计行的场景，成功时必须携带数据和汇总信息。
 
 ```csharp
+// 构造函数
 new SummaryPagerResponseResult<Order, OrderSummary>(
     items: orders,
     summary: new OrderSummary { TotalAmount = 99999 },
@@ -117,6 +120,9 @@ new SummaryPagerResponseResult<Order, OrderSummary>(
     pageSize: 20,
     totalCount: 500
 );
+
+// 工厂方法（成功时必须传数据）
+SummaryPagerResponseResult<Order, OrderSummary>.Success(orders, new OrderSummary { TotalAmount = 99999 }, 1, 20, 500);
 ```
 
 ---
@@ -158,13 +164,16 @@ var request = new SearchPager<ClientFilter>
 
 ### OrderByRQ / PagerEx
 
-排序条件。
+排序条件，`Field` 属性在赋值时进行白名单校验以防止 SQL 注入（仅允许字母、数字、下划线、点号、方括号）。
 
 ```csharp
 new OrderByRQ { Field = "CreateTime", Type = 1 }   // 降序
 
 // 转换为 SQL ORDER BY 子句
 orderByList.ToSql();  // "CreateTime DESC,Name ASC"
+
+// 非法字段名会在赋值时抛出 ArgumentException
+// new OrderByRQ { Field = "1; DROP TABLE Users" };  // 抛出异常
 ```
 
 ---

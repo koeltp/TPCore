@@ -1,12 +1,17 @@
 namespace Taipi.Core.RQRS;
 
 /// <summary>
-/// 状态响应结果类，包含状态码、消息和时间戳
+/// 状态响应结果基类，包含状态码、消息和时间戳
 /// </summary>
 public class StatusResponseResult
 {
+    /// <summary>响应状态码，默认 200 表示成功</summary>
     public int Code { get; set; } = 200;
+
+    /// <summary>响应消息描述</summary>
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>响应生成时间戳（UTC）</summary>
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
 
@@ -17,7 +22,7 @@ public class StatusResponseResult
     /// <returns></returns>
     public static StatusResponseResult Success(string message)
     {
-        return new StatusResponseResult { Code = 200, Message = message };
+        return new StatusResponseResult { Message = message };
     }
 
     /// <summary>
