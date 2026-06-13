@@ -1,12 +1,14 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
 	<PropertyGroup>
 		<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+		<OutputType>Library</OutputType>
+		<IsPackable>true</IsPackable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
 		<PackageId>Taipi.Core</PackageId>
-		<Version>1.0.5</Version>
+		<Version>1.1.1</Version>
 		<Authors>Taipi</Authors>
 		<Description>Taipi 基础类库，包含通用响应模型、扩展方法等</Description>
 		<PackageTags>taipi;response;models</PackageTags>

@@ -1,12 +1,12 @@
 namespace Taipi.Core.RQRS;
 
 /// <summary>
-/// 状态响应结果基类，包含状态码和消息
+/// 状态响应结果基类，Code=0 表示成功，非0 为业务错误码
 /// </summary>
 public class StatusResponseResult
 {
-    /// <summary>响应状态码，默认 200 表示成功</summary>
-    public int Code { get; set; } = 200;
+    /// <summary>业务状态码，0=成功，非0=业务错误码（4位：模块+编号）</summary>
+    public int Code { get; set; } = 0;
 
     /// <summary>响应消息描述</summary>
     public string Message { get; set; } = string.Empty;
@@ -19,82 +19,26 @@ public class StatusResponseResult
 
 
     /// <summary>
-    /// 成功响应结果，默认状态码为200，消息由调用者提供
+    /// 成功响应，默认消息为"操作成功"
     /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
+    public static StatusResponseResult Success()
+    {
+        return new StatusResponseResult { Message = "操作成功" };
+    }
+
+    /// <summary>
+    /// 成功响应，自定义消息
+    /// </summary>
     public static StatusResponseResult Success(string message)
     {
         return new StatusResponseResult { Message = message };
     }
 
     /// <summary>
-    /// 错误响应结果，状态码由调用者提供，消息由调用者提供
+    /// 错误响应，业务错误码和消息由调用者指定
     /// </summary>
-    /// <param name="code"></param>
-    /// <param name="message"></param>
-    /// <returns></returns>
     public static StatusResponseResult Error(int code, string message)
     {
         return new StatusResponseResult { Code = code, Message = message };
-    }
-
-    /// <summary>
-    /// 成功响应结果，默认状态码为200，默认消息为"操作成功"
-    /// </summary>
-    /// <returns></returns>
-    public static StatusResponseResult Success()
-    {
-        return Success("操作成功");
-    }
-
-    /// <summary>
-    /// 请求参数错误响应结果，状态码为400，消息由调用者提供或默认为"请求参数错误"
-    /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
-    public static StatusResponseResult BadRequest(string message = "请求参数错误")
-    {
-        return Error(400, message);
-    }
-
-    /// <summary>
-    /// 未授权响应结果，状态码为401，消息由调用者提供或默认为"未授权"
-    /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
-    public static StatusResponseResult Unauthorized(string message = "未授权")
-    {
-        return Error(401, message);
-    }
-
-    /// <summary>
-    /// 禁止访问响应结果，状态码为403，消息由调用者提供或默认为"禁止访问"
-    /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
-    public static StatusResponseResult Forbidden(string message = "禁止访问")
-    {
-        return Error(403, message);
-    }
-
-    /// <summary>
-    /// 资源未找到响应结果，状态码为404，消息由调用者提供或默认为"资源未找到"
-    /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
-    public static StatusResponseResult NotFound(string message = "资源未找到")
-    {
-        return Error(404, message);
-    }
-
-    /// <summary>
-    /// 服务器内部错误响应结果，状态码为500，消息由调用者提供或默认为"服务器内部错误"
-    /// </summary>
-    /// <param name="message"></param>
-    /// <returns></returns>
-    public static StatusResponseResult InternalError(string message = "服务器内部错误")
-    {
-        return Error(500, message);
     }
 }
