@@ -1,7 +1,7 @@
 namespace Taipi.Core.RQRS;
 
 /// <summary>
-/// 状态响应结果基类，包含状态码、消息和时间戳
+/// 状态响应结果基类，包含状态码和消息
 /// </summary>
 public class StatusResponseResult
 {
@@ -11,8 +11,11 @@ public class StatusResponseResult
     /// <summary>响应消息描述</summary>
     public string Message { get; set; } = string.Empty;
 
-    /// <summary>响应生成时间戳（UTC）</summary>
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    /// <summary>
+    /// 请求追踪标识，用于关联日志链路。
+    /// 仅在异常响应中由中间件赋值，正常业务响应为 null
+    /// </summary>
+    public string? CorrelationId { get; set; }
 
 
     /// <summary>
