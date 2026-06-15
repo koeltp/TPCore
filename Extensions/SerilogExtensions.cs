@@ -1,6 +1,5 @@
 using Serilog;
-using Taipi.Core.Middleware;
-
+using Taipi.Core.Logging;
 namespace Taipi.Core.Extensions;
 
 /// <summary>
@@ -9,46 +8,51 @@ namespace Taipi.Core.Extensions;
 public static class SerilogExtensions
 {
     /// <summary>
-    /// 创建 Serilog 引导日志，用于捕获 Host 构建前的启动错误
+    /// 创建 Serilog 引导日志，用于捕获 Host 构建前的启动错误。
+    /// 如果配置文件加载失败，降级为控制台输出。
     /// </summary>
     public static void CreateBootstrapLogger()
     {
-        Log.Logger = new LoggerConfiguration()
-            .ReadFrom.Configuration(new ConfigurationBuilder()
+        try
+        {
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+            var configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"}.json", optional: true, reloadOnChange: true)
-                .Build())
-            .Enrich.FromLogContext()
-            .CreateBootstrapLogger();
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+                .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: false)
+                .AddEnvironmentVariables()
+                .Build();
+
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration)
+                .Enrich.FromLogContext()
+                .CreateBootstrapLogger();
+        }
+        catch
+        {
+            // 降级：确保引导日志至少能输出到控制台
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .WriteTo.Console()
+                .CreateBootstrapLogger();
+        }
     }
 
     /// <summary>
-    /// 配置 Host 使用 Serilog，从 appsettings 读取完整配置
+    /// 配置 Host 使用 Serilog，从 appsettings 和 DI 容器读取完整配置。
+    /// 已集成 FromLogContext，如需全局脱敏请在外部添加 .Enrich.With&lt;SensitiveDataEnricher&gt;()
     /// </summary>
     public static IHostBuilder UseSerilogFromConfiguration(this IHostBuilder hostBuilder)
     {
         return hostBuilder.UseSerilog((context, services, loggerConfig) =>
         {
-            loggerConfig.ReadFrom.Configuration(context.Configuration)
-                        .ReadFrom.Services(services)
-                        .Enrich.FromLogContext();
+            loggerConfig
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                // 如果需要全局脱敏，取消下面注释并实现 SensitiveDataEnricher
+            .Enrich.With<SensitiveDataEnricher>();
         });
     }
 
-    /// <summary>
-    /// 注册请求日志中间件（一行输出一个请求，自动过滤低价值路径）
-    /// </summary>
-    public static IApplicationBuilder UseRequestLogging(this IApplicationBuilder app)
-    {
-        return app.UseMiddleware<RequestLoggingMiddleware>();
-    }
-
-    /// <summary>
-    /// 注册 CorrelationId 中间件，将请求链路标识注入 Serilog 日志上下文
-    /// </summary>
-    public static IApplicationBuilder UseCorrelationId(this IApplicationBuilder app)
-    {
-        return app.UseMiddleware<CorrelationIdMiddleware>();
-    }
 }
