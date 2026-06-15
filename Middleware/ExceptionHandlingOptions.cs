@@ -44,4 +44,14 @@ public class ExceptionHandlingOptions
     /// 非生产环境下的未知异常消息工厂，默认返回完整异常信息
     /// </summary>
     public Func<Exception, string> DetailedErrorMessageFactory { get; set; } = ex => ex.ToString();
+
+    /// <summary>
+    /// 是否记录异常日志（如果请求日志中间件已足够详细，可设为false避免重复）
+    /// </summary>
+    public bool LogException { get; set; } = true;
+
+    /// <summary>
+    /// 是否允许通过请求头 X-Debug 在生产环境返回详细错误
+    /// </summary>
+    public bool EnableDebugHeaderInProduction { get; set; } = false;
 }
