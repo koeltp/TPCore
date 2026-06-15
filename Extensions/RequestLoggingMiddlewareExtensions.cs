@@ -7,7 +7,7 @@ public static class RequestLoggingExtensions
     /// <summary>
     /// 添加请求日志中间件配置
     /// </summary>
-    public static IServiceCollection AddRequestLogging(this IServiceCollection services, Action<RequestLoggingOptions>? configure = null)
+    public static IServiceCollection AddTaiPiRequestLogging(this IServiceCollection services, Action<RequestLoggingOptions>? configure = null)
     {
         if (configure != null)
             services.Configure(configure);
@@ -19,7 +19,7 @@ public static class RequestLoggingExtensions
     /// <summary>
     /// 启用请求日志中间件
     /// </summary>
-    public static IApplicationBuilder UseRequestLogging(this IApplicationBuilder app)
+    public static IApplicationBuilder UseTaiPiRequestLogging(this IApplicationBuilder app)
     {
         return app.UseMiddleware<RequestLoggingMiddleware>();
     }
