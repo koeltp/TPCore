@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Taipi.Core</PackageId>
-    <Version>1.3.4</Version>
+    <Version>1.3.4.1</Version>
     <Authors>TaiPi</Authors>
     <Description>TaiPi Core Library for .NET 8.0+</Description>
     <PackageTags>taipi;response;models</PackageTags>

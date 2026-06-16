@@ -34,29 +34,24 @@ public class SensitiveDataEnricher : ILogEventEnricher
 
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
-        // 1. 处理消息模板中的纯文本内容（比如 Log.Information("... password=xxx")）
-        var rawMessage = logEvent.RenderMessage();
-        var sanitizedMessage = SanitizeText(rawMessage);
-        if (sanitizedMessage != rawMessage)
-        {
-            // 替换消息文本（通过修改属性）
-            logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty("__SanitizedMessage", sanitizedMessage));
-            // 注意：Serilog 的 Message 是只读的，这里添加自定义属性供输出模板使用
-            // 更好的做法是使用自定义的 ITextFormatter，但简单场景下添加额外属性即可。
-        }
-
-        // 2. 处理所有结构化属性（如 Log.Information("User {User}", user)）
+        // 1. 处理所有结构化属性：属性名匹配敏感字段时直接替换值
         foreach (var property in logEvent.Properties.ToList())
         {
             if (property.Value is ScalarValue scalar && scalar.Value is string stringValue)
             {
+                // 属性名匹配敏感字段 → 直接替换整个值为 ***
+                if (SensitiveKeys.Contains(property.Key) && !string.IsNullOrEmpty(stringValue))
+                {
+                    logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty(property.Key, Replacement));
+                    continue;
+                }
+                // 属性值文本中包含 key=value 形式的敏感信息 → 替换值中的敏感部分
                 var sanitized = SanitizeText(stringValue);
                 if (sanitized != stringValue)
                 {
                     logEvent.AddOrUpdateProperty(propertyFactory.CreateProperty(property.Key, sanitized));
                 }
             }
-            // 可选：处理嵌套对象（如匿名对象、字典等），这里为了性能暂不递归
         }
     }
 
