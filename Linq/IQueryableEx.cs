@@ -24,6 +24,15 @@ public static class IQueryableEx
         return condition ? source.Where(predicate) : source;
     }
 
+    /// <summary>
+    /// 根据条件排序
+    /// </summary>
+    /// <typeparam name="T">数据类型</typeparam>
+    /// <typeparam name="TKey">排序键类型</typeparam>
+    /// <param name="source">数据源</param>
+    /// <param name="condition">是否排序</param>
+    /// <param name="keySelector">排序键选择器 x => x.Id</param>
+    /// <returns>排序后的数据</returns>
     public static IQueryable<T> OrderByIf<T, TKey>(this IQueryable<T> source, bool condition, Expression<Func<T, TKey>> keySelector)
     {
         return condition ? source.OrderBy(keySelector) : source;

@@ -13,7 +13,7 @@ public class RequestLoggingOptions
     public string[] StaticFileDirectories { get; set; } = { "/static/", "/wwwroot/", "/lib/", "/css/", "/js/" };
 
     /// <summary>在上述静态目录中，匹配这些扩展名的文件跳过日志</summary>
-    public string[] IgnoredFileExtensions { get; set; } = { ".js", ".css", ".map", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot" };
+    public string[] IgnoredFileExtensions { get; set; } = [".js", ".css", ".map", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"];
 
     /// <summary>请求体最大记录长度（字符数），超出部分截断</summary>
     public int MaxRequestBodyLength { get; set; } = 4096;
@@ -28,7 +28,7 @@ public class RequestLoggingOptions
     public bool LogResponseBodyForErrorDetection { get; set; } = true;
 
     /// <summary>需要脱敏的字段名（QueryString 和 JSON Body）</summary>
-    public string[] SensitiveFields { get; set; } = { "password", "token", "secret", "authorization", "apikey" };
+    public string[] SensitiveFields { get; set; } = ["password", "token", "secret", "authorization", "apikey"];
 
     /// <summary>脱敏替换字符串</summary>
     public string SensitiveReplacement { get; set; } = "***";
