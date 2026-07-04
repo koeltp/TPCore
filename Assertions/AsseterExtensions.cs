@@ -5,18 +5,21 @@ namespace Taipi.Core.Assertions
     public static class AsseterExtensions
     {
         /// <summary>
-        /// 断言为假不抛出异常, 否则抛出异常
+        /// 断言为False时抛出异常
         /// </summary>
         /// <param name="r">布尔值</param>
         /// <param name="errorCode">错误码</param>
         /// <param name="errorMsg">错误信息</param>
         public static void MustBeFalse(this bool r, int errorCode, string errorMsg)
         {
-            (!r).MustBeTrue(errorCode, errorMsg);
+            if (!r)
+            {
+                throw new AppException(errorCode, errorMsg);
+            }
         }
 
         /// <summary>
-        /// 断言为真不抛出异常, 否则抛出异常
+        /// 断言为True时抛出异常
         /// </summary>
         /// <param name="r">布尔值</param>
         /// <param name="errorCode">错误码</param>
@@ -25,9 +28,8 @@ namespace Taipi.Core.Assertions
         {
             if (r)
             {
-                return;
+                throw new AppException(errorCode, errorMsg);
             }
-            throw new AppException(errorCode, errorMsg);
         }
 
         /// <summary>
