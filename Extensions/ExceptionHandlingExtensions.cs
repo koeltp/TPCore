@@ -1,4 +1,6 @@
 using Taipi.Core.Middleware;
+using Taipi.Core.Exceptions;
+using Taipi.Core.Exceptions.Abstract;
 
 namespace Taipi.Core.Extensions;
 
@@ -21,8 +23,18 @@ public static class ExceptionHandlingExtensions
             services.Configure(configure);
         else
             services.Configure<ExceptionHandlingOptions>(_ => { });
+
+        services.AddScoped<IExceptionHandler<AppException>, AppExceptionHandler>();
+        services.AddScoped<IExceptionHandler<ArgumentException>, ArgumentExceptionHandler>();
+        services.AddScoped<IExceptionHandler<BadRequestException>, BadRequestHandler>();        
+        services.AddScoped<IExceptionHandler<ForbiddenException>, ForbiddenHandler>();
+        services.AddScoped<IExceptionHandler<KeyNotFoundException>, KeyNotFoundHandler>();
+        services.AddScoped<IExceptionHandler<UnauthorizedAccessException>, UnauthorizedAccessHandler>();
+        services.AddScoped<IExceptionHandler<Exception>, UnknownExceptionHandler>();
         return services;
     }
+
+
 
     /// <summary>
     /// 使用全局异常处理中间件

@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using Taipi.Core.Exceptions;
 using Taipi.Core.RQRS;
+using Taipi.Core.Exceptions.Abstract;
+using System.Collections.Concurrent;
 
 namespace Taipi.Core.Middleware;
 
@@ -18,6 +20,8 @@ public class ExceptionHandlingMiddleware
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
     private readonly IWebHostEnvironment _environment;
     private readonly ExceptionHandlingOptions _options;
+
+    private static readonly ConcurrentDictionary<Type, Func<IServiceProvider, Exception, HttpContext, (int, StatusResponseResult)>> _handlerCache = new();
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
@@ -81,35 +85,37 @@ public class ExceptionHandlingMiddleware
         await context.Response.WriteAsync(JsonSerializer.Serialize(result, _jsonOptions));
     }
 
-    /// <summary>
-    /// 根据异常类型映射到 HTTP 状态码和业务响应
-    /// </summary>
+
     private (int statusCode, StatusResponseResult result) MapExceptionToResponse(Exception exception, HttpContext context)
     {
-        return exception switch
-        {
-            // 1. 具体子类优先
-            BadRequestException badEx => (StatusCodes.Status400BadRequest, StatusResponseResult.Error(badEx.Code, badEx.Message)),
-            ForbiddenException forbidEx => (StatusCodes.Status403Forbidden, StatusResponseResult.Error(forbidEx.Code, forbidEx.Message)),
-            // 2. 框架异常
-            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, StatusResponseResult.Error(_options.UnauthorizedCode, GetFinalErrorMessage(exception, context, _options.UnauthorizedMessage))),
-            ArgumentException => (StatusCodes.Status400BadRequest, StatusResponseResult.Error(_options.BadRequestCode, GetFinalErrorMessage(exception, context, _options.BadRequestMessage))),
-            KeyNotFoundException => (StatusCodes.Status404NotFound, StatusResponseResult.Error(_options.NotFoundCode, GetFinalErrorMessage(exception, context, _options.NotFoundMessage))),
-            // 3. 基类 AppException（注意：这里要排除已被上面处理的子类，但 switch 已按顺序，所以不会重复）
-            AppException appEx => (StatusCodes.Status200OK, StatusResponseResult.Error(appEx.Code, appEx.Message)),
-            // 4. 未知异常
-            _ => (StatusCodes.Status500InternalServerError, StatusResponseResult.Error(_options.UnknownErrorCode, GetFinalErrorMessage(exception, context, _options.UnknownErrorMessage)))
-        };
-    }
+        var exceptionType = exception.GetType();
 
-    /// <summary>
-    /// 获取最终的错误消息（生产环境/调试模式）
-    /// </summary>
-    private string GetFinalErrorMessage(Exception exception, HttpContext context, string defaultMessage)
-    {
-        return IsDebugMode(context)
-            ? _options.DetailedErrorMessageFactory(exception)
-            : defaultMessage;
+        // 从缓存获取或创建执行委托
+        var handlerFunc = _handlerCache.GetOrAdd(exceptionType, type =>
+        {
+            var handlerType = typeof(IExceptionHandler<>).MakeGenericType(type);
+            var handleMethod = handlerType.GetMethod("Handle");
+            if (handleMethod == null)
+            {
+                // 理论上不可能，IExceptionHandler<T> 强制实现了 Handle
+                return null;
+            }
+
+            return new Func<IServiceProvider, Exception, HttpContext, (int, StatusResponseResult)>(
+                (serviceProvider, ex, ctx) =>
+                {
+                    using (var scope = serviceProvider.CreateScope())
+                    {
+                        // 要求必须注册了对应的 Handler，否则抛出异常（明确提示配置错误）
+                        var handler = scope.ServiceProvider.GetRequiredService(handlerType);
+                        var result = handleMethod.Invoke(handler, [ex, ctx]);
+                        return ((int, StatusResponseResult))result;
+                    }
+                });
+        });
+
+        // 如果缓存构建失败（几乎不可能），或者没有注册 Handler，GetRequiredService 会抛出异常
+        return handlerFunc(context.RequestServices, exception, context);
     }
 
     /// <summary>

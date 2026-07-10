@@ -1,4 +1,4 @@
-namespace Taipi.Core.Middleware;
+﻿namespace Taipi.Core.Exceptions;
 
 /// <summary>
 /// 全局异常处理中间件配置项，项目可覆盖框架异常的错误码和消息
@@ -18,12 +18,12 @@ public class ExceptionHandlingOptions
     /// <summary>
     /// 参数错误异常的错误码
     /// </summary>
-    public int BadRequestCode { get; set; } = 2;
+    public int ArgumentExceptionCode { get; set; } = 2;
 
     /// <summary>
     /// 参数错误异常的提示消息
     /// </summary>
-    public string BadRequestMessage { get; set; } = "参数错误";
+    public string ArgumentExceptionMessage { get; set; } = "参数错误";
 
     /// <summary>
     /// 资源不存在异常的错误码
