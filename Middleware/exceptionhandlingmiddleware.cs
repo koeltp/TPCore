@@ -55,15 +55,13 @@ public class ExceptionHandlingMiddleware
         var (httpStatusCode, result) = MapExceptionToResponse(exception, context);
 
         // 2. 附加 CorrelationId（确保存在）
-        var correlationId = GetOrCreateCorrelationId(context);
-        result.CorrelationId = correlationId;
+        result.CorrelationId = context.Items["CorrelationId"] as string;
 
         // 3. 记录异常日志（根据配置和异常类型决定级别）
         if (_options.LogException)
         {
             var logLevel = GetLogLevel(exception);
-            var shouldLogDetail = ShouldLogDetail(context);
-            var errorMessage = shouldLogDetail
+            var errorMessage = IsDebugMode(context)
                 ? exception.ToString()
                 : $"异常类型: {exception.GetType().Name}, 消息: {exception.Message}";
 
@@ -73,6 +71,13 @@ public class ExceptionHandlingMiddleware
         // 4. 写入响应
         context.Response.StatusCode = httpStatusCode;
         context.Response.ContentType = "application/json";
+
+        // ⭐ 如果是业务异常（200）或者任何错误响应，都禁用缓存，避免代理/CDN/浏览器缓存错误内容
+        // 特别是对于 GET 请求返回 200 错误时，这条极其重要
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        context.Response.Headers.Pragma = "no-cache"; // 兼容 HTTP/1.0
+        context.Response.Headers.Expires = "0";       // 兼容 HTTP/1.0
+
         await context.Response.WriteAsync(JsonSerializer.Serialize(result, _jsonOptions));
     }
 
@@ -87,27 +92,24 @@ public class ExceptionHandlingMiddleware
             BadRequestException badEx => (StatusCodes.Status400BadRequest, StatusResponseResult.Error(badEx.Code, badEx.Message)),
             ForbiddenException forbidEx => (StatusCodes.Status403Forbidden, StatusResponseResult.Error(forbidEx.Code, forbidEx.Message)),
             // 2. 框架异常
-            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, StatusResponseResult.Error(_options.UnauthorizedCode, _options.UnauthorizedMessage)),
-            ArgumentException argEx => (StatusCodes.Status400BadRequest, StatusResponseResult.Error(_options.BadRequestCode, argEx.Message)),
-            KeyNotFoundException => (StatusCodes.Status404NotFound, StatusResponseResult.Error(_options.NotFoundCode, _options.NotFoundMessage)),
+            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, StatusResponseResult.Error(_options.UnauthorizedCode, GetFinalErrorMessage(exception, context, _options.UnauthorizedMessage))),
+            ArgumentException => (StatusCodes.Status400BadRequest, StatusResponseResult.Error(_options.BadRequestCode, GetFinalErrorMessage(exception, context, _options.BadRequestMessage))),
+            KeyNotFoundException => (StatusCodes.Status404NotFound, StatusResponseResult.Error(_options.NotFoundCode, GetFinalErrorMessage(exception, context, _options.NotFoundMessage))),
             // 3. 基类 AppException（注意：这里要排除已被上面处理的子类，但 switch 已按顺序，所以不会重复）
             AppException appEx => (StatusCodes.Status200OK, StatusResponseResult.Error(appEx.Code, appEx.Message)),
             // 4. 未知异常
-            _ => (StatusCodes.Status500InternalServerError, StatusResponseResult.Error(_options.UnknownErrorCode, GetFinalErrorMessage(exception, context)))
+            _ => (StatusCodes.Status500InternalServerError, StatusResponseResult.Error(_options.UnknownErrorCode, GetFinalErrorMessage(exception, context, _options.UnknownErrorMessage)))
         };
     }
 
     /// <summary>
     /// 获取最终的错误消息（生产环境/调试模式）
     /// </summary>
-    private string GetFinalErrorMessage(Exception exception, HttpContext context)
+    private string GetFinalErrorMessage(Exception exception, HttpContext context, string defaultMessage)
     {
-        var isDebugMode = _environment.IsDevelopment() ||
-                          (_options.EnableDebugHeaderInProduction &&
-                           context.Request.Headers.ContainsKey("X-Debug"));
-        return isDebugMode
+        return IsDebugMode(context)
             ? _options.DetailedErrorMessageFactory(exception)
-            : _options.UnknownErrorMessage;
+            : defaultMessage;
     }
 
     /// <summary>
@@ -132,33 +134,11 @@ public class ExceptionHandlingMiddleware
     }
 
     /// <summary>
-    /// 判断是否记录详细异常堆栈（用于日志）
+    /// 判断是否为调试模式（开发环境或生产环境下的 X-Debug 头）
     /// </summary>
-    private bool ShouldLogDetail(HttpContext context)
+    /// <returns>是否为调试模式</returns>
+    private bool IsDebugMode(HttpContext context)
     {
-        return _environment.IsDevelopment() ||
-               (_options.EnableDebugHeaderInProduction && context.Request.Headers.ContainsKey("X-Debug"));
-    }
-
-    /// <summary>
-    /// 获取或生成 CorrelationId，并存放到 HttpContext.Items 和日志上下文中
-    /// </summary>
-    private static string GetOrCreateCorrelationId(HttpContext context)
-    {
-        const string correlationKey = "CorrelationId";
-        if (context.Items.TryGetValue(correlationKey, out var value) && value is string cid && !string.IsNullOrEmpty(cid))
-            return cid;
-
-        // 尝试从请求头获取
-        if (context.Request.Headers.TryGetValue("X-Correlation-ID", out var headerCid) && !string.IsNullOrEmpty(headerCid))
-        {
-            context.Items[correlationKey] = headerCid.ToString();
-            return headerCid.ToString();
-        }
-
-        // 生成新的
-        var newCid = Guid.NewGuid().ToString("N");
-        context.Items[correlationKey] = newCid;
-        return newCid;
+        return _environment.IsDevelopment() || (_options.EnableDebugHeaderInProduction && context.Request.Headers.ContainsKey("X-Debug"));
     }
 }

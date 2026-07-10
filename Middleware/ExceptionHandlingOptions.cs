@@ -21,6 +21,11 @@ public class ExceptionHandlingOptions
     public int BadRequestCode { get; set; } = 2;
 
     /// <summary>
+    /// 参数错误异常的提示消息
+    /// </summary>
+    public string BadRequestMessage { get; set; } = "参数错误";
+
+    /// <summary>
     /// 资源不存在异常的错误码
     /// </summary>
     public int NotFoundCode { get; set; } = 3;
