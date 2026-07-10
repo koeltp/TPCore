@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
@@ -21,7 +23,15 @@ public class ExceptionHandlingMiddleware
     private readonly IWebHostEnvironment _environment;
     private readonly ExceptionHandlingOptions _options;
 
-    private static readonly ConcurrentDictionary<Type, Func<IServiceProvider, Exception, HttpContext, (int, StatusResponseResult)>> _handlerCache = new();
+    /// <summary>
+    /// 已解析的 Handler 接口类型缓存：异常类型 → IExceptionHandler{T} 接口类型
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, Type> _resolvedHandlerTypeCache = new();
+
+    /// <summary>
+    /// 编译后的 Handle 委托缓存：Handler 接口类型 → 编译委托
+    /// </summary>
+    private static readonly ConcurrentDictionary<Type, (Func<object, Exception, HttpContext, (int, StatusResponseResult)> Handle, Func<object, Exception, LogLevel> GetLogLevel)> _compiledDelegateCache = new();
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
@@ -55,16 +65,15 @@ public class ExceptionHandlingMiddleware
 
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        // 1. 确定 HTTP 状态码和响应结果
-        var (httpStatusCode, result) = MapExceptionToResponse(exception, context);
+        // 1. 确定 HTTP 状态码、响应结果和日志级别
+        var (httpStatusCode, result, logLevel) = MapExceptionToResponse(exception, context);
 
-        // 2. 附加 CorrelationId（确保存在）
+        // 2. 附加 CorrelationId
         result.CorrelationId = context.Items["CorrelationId"] as string;
 
-        // 3. 记录异常日志（根据配置和异常类型决定级别）
+        // 3. 记录异常日志（日志级别由 Handler 决定）
         if (_options.LogException)
         {
-            var logLevel = GetLogLevel(exception);
             var errorMessage = IsDebugMode(context)
                 ? exception.ToString()
                 : $"异常类型: {exception.GetType().Name}, 消息: {exception.Message}";
@@ -76,73 +85,117 @@ public class ExceptionHandlingMiddleware
         context.Response.StatusCode = httpStatusCode;
         context.Response.ContentType = "application/json";
 
-        // ⭐ 如果是业务异常（200）或者任何错误响应，都禁用缓存，避免代理/CDN/浏览器缓存错误内容
-        // 特别是对于 GET 请求返回 200 错误时，这条极其重要
+        // 禁用缓存，避免代理/CDN/浏览器缓存错误内容（特别是 GET 请求返回 200 错误时）
         context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
-        context.Response.Headers.Pragma = "no-cache"; // 兼容 HTTP/1.0
-        context.Response.Headers.Expires = "0";       // 兼容 HTTP/1.0
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers.Expires = "0";
 
         await context.Response.WriteAsync(JsonSerializer.Serialize(result, _jsonOptions));
     }
 
-
-    private (int statusCode, StatusResponseResult result) MapExceptionToResponse(Exception exception, HttpContext context)
+    /// <summary>
+    /// 根据异常类型映射到 HTTP 状态码、响应结果和日志级别。
+    /// 沿继承链查找已注册的 Handler，未注册的类型自动回退到基类 Handler。
+    /// </summary>
+    private (int statusCode, StatusResponseResult result, LogLevel logLevel) MapExceptionToResponse(Exception exception, HttpContext context)
     {
         var exceptionType = exception.GetType();
 
-        // 从缓存获取或创建执行委托
-        var handlerFunc = _handlerCache.GetOrAdd(exceptionType, type =>
+        // 1. 查找已解析的 Handler 类型（首次异常后缓存，O(1)）
+        if (!_resolvedHandlerTypeCache.TryGetValue(exceptionType, out var handlerInterfaceType))
         {
-            var handlerType = typeof(IExceptionHandler<>).MakeGenericType(type);
-            var handleMethod = handlerType.GetMethod("Handle");
-            if (handleMethod == null)
-            {
-                // 理论上不可能，IExceptionHandler<T> 强制实现了 Handle
-                return null;
-            }
+            handlerInterfaceType = ResolveHandlerType(exceptionType, context.RequestServices);
+            _resolvedHandlerTypeCache.TryAdd(exceptionType, handlerInterfaceType);
+        }
 
-            return new Func<IServiceProvider, Exception, HttpContext, (int, StatusResponseResult)>(
-                (serviceProvider, ex, ctx) =>
-                {
-                    using (var scope = serviceProvider.CreateScope())
-                    {
-                        // 要求必须注册了对应的 Handler，否则抛出异常（明确提示配置错误）
-                        var handler = scope.ServiceProvider.GetRequiredService(handlerType);
-                        var result = handleMethod.Invoke(handler, [ex, ctx]);
-                        return ((int, StatusResponseResult))result;
-                    }
-                });
-        });
+        // 2. 获取或创建编译后的委托（每个 Handler 类型只编译一次）
+        var (handleFunc, getLogLevelFunc) = _compiledDelegateCache.GetOrAdd(handlerInterfaceType, CompileDelegates);
 
-        // 如果缓存构建失败（几乎不可能），或者没有注册 Handler，GetRequiredService 会抛出异常
-        return handlerFunc(context.RequestServices, exception, context);
+        // 3. 从 DI 解析 Handler 并执行
+        using var scope = context.RequestServices.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService(handlerInterfaceType);
+        var (statusCode, result) = handleFunc(handler, exception, context);
+        var logLevel = getLogLevelFunc(handler, exception);
+
+        return (statusCode, result, logLevel);
     }
 
     /// <summary>
-    /// 根据异常类型确定日志级别
+    /// 沿异常继承链向上查找 DI 中已注册的 Handler，确保未注册的异常类型能回退到基类 Handler
     /// </summary>
-    private static LogLevel GetLogLevel(Exception exception)
+    private static Type ResolveHandlerType(Type exceptionType, IServiceProvider serviceProvider)
     {
-        return exception switch
+        var currentType = exceptionType;
+        while (currentType != null && currentType != typeof(object))
         {
-            // 先匹配具体子类
-            BadRequestException => LogLevel.Warning,
-            ForbiddenException => LogLevel.Information,
-            // 再匹配其他框架异常
-            UnauthorizedAccessException => LogLevel.Information,
-            ArgumentException => LogLevel.Warning,
-            KeyNotFoundException => LogLevel.Information,
-            // 最后匹配基类 AppException（捕获所有未单独处理的业务异常）
-            AppException => LogLevel.Warning,
-            // 未知异常
-            _ => LogLevel.Error
-        };
+            var candidate = typeof(IExceptionHandler<>).MakeGenericType(currentType);
+            // 用 GetService 探测是否注册，不创建实例
+            if (serviceProvider.GetService(candidate) != null)
+            {
+                return candidate;
+            }
+            currentType = currentType.BaseType;
+        }
+
+        // 兜底：IExceptionHandler{Exception} 由 UnknownExceptionHandler 实现，始终注册
+        return typeof(IExceptionHandler<Exception>);
+    }
+
+    /// <summary>
+    /// 将 Handler 的 Handle 和 GetLogLevel 方法编译为强类型委托，消除反射调用开销
+    /// </summary>
+    private static (Func<object, Exception, HttpContext, (int, StatusResponseResult)> Handle, Func<object, Exception, LogLevel> GetLogLevel) CompileDelegates(Type handlerInterfaceType)
+    {
+        var handleMethod = handlerInterfaceType.GetMethod(nameof(IExceptionHandler<Exception>.Handle))
+            ?? throw new InvalidOperationException($"Handler {handlerInterfaceType.Name} 未实现 Handle 方法");
+
+        var getLogLevelMethod = handlerInterfaceType.GetMethod(nameof(IExceptionHandler<Exception>.GetLogLevel))
+            ?? throw new InvalidOperationException($"Handler {handlerInterfaceType.Name} 未实现 GetLogLevel 方法");
+
+        return (CompileHandleMethod(handleMethod), CompileGetLogLevelMethod(getLogLevelMethod));
+    }
+
+    /// <summary>
+    /// 编译 Handle 方法为强类型委托：object → (int, StatusResponseResult)
+    /// </summary>
+    private static Func<object, Exception, HttpContext, (int, StatusResponseResult)> CompileHandleMethod(MethodInfo handleMethod)
+    {
+        var handlerParam = Expression.Parameter(typeof(object), "handler");
+        var exParam = Expression.Parameter(typeof(Exception), "ex");
+        var ctxParam = Expression.Parameter(typeof(HttpContext), "ctx");
+
+        var call = Expression.Call(
+            Expression.Convert(handlerParam, handleMethod.DeclaringType!),
+            handleMethod,
+            Expression.Convert(exParam, handleMethod.GetParameters()[0].ParameterType),
+            ctxParam
+        );
+
+        return Expression.Lambda<Func<object, Exception, HttpContext, (int, StatusResponseResult)>>(
+            call, handlerParam, exParam, ctxParam).Compile();
+    }
+
+    /// <summary>
+    /// 编译 GetLogLevel 方法为强类型委托：object → LogLevel
+    /// </summary>
+    private static Func<object, Exception, LogLevel> CompileGetLogLevelMethod(MethodInfo getLogLevelMethod)
+    {
+        var handlerParam = Expression.Parameter(typeof(object), "handler");
+        var exParam = Expression.Parameter(typeof(Exception), "ex");
+
+        var call = Expression.Call(
+            Expression.Convert(handlerParam, getLogLevelMethod.DeclaringType!),
+            getLogLevelMethod,
+            Expression.Convert(exParam, getLogLevelMethod.GetParameters()[0].ParameterType)
+        );
+
+        return Expression.Lambda<Func<object, Exception, LogLevel>>(
+            call, handlerParam, exParam).Compile();
     }
 
     /// <summary>
     /// 判断是否为调试模式（开发环境或生产环境下的 X-Debug 头）
     /// </summary>
-    /// <returns>是否为调试模式</returns>
     private bool IsDebugMode(HttpContext context)
     {
         return _environment.IsDevelopment() || (_options.EnableDebugHeaderInProduction && context.Request.Headers.ContainsKey("X-Debug"));

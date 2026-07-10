@@ -19,4 +19,9 @@ public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
     {
         return (StatusCodes.Status403Forbidden, StatusResponseResult.Error(exception.Code, exception.Message));
     }
+
+    /// <summary>
+    /// 权限不足属于正常业务分支，用 Information 避免产生过多告警
+    /// </summary>
+    public override LogLevel GetLogLevel(ForbiddenException exception) => LogLevel.Information;
 }

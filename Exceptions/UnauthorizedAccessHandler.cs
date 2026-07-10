@@ -21,4 +21,9 @@ public class UnauthorizedAccessHandler : ExceptionHandlerBase<UnauthorizedAccess
     {
         return (StatusCodes.Status401Unauthorized, StatusResponseResult.Error(_options.UnauthorizedCode, GetFinalErrorMessage(exception, context, _options.UnauthorizedMessage)));
     }
+
+    /// <summary>
+    /// 未授权通常是 Token 过期，属于正常业务分支，用 Information 避免产生过多告警
+    /// </summary>
+    public override LogLevel GetLogLevel(UnauthorizedAccessException exception) => LogLevel.Information;
 }

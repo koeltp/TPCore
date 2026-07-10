@@ -36,4 +36,9 @@ public class UnknownExceptionHandler : ExceptionHandlerBase<Exception>
         var message = GetFinalErrorMessage(exception, context, _options.UnknownErrorMessage);
         return (StatusCodes.Status500InternalServerError, StatusResponseResult.Error(_options.UnknownErrorCode, message));
     }
+
+    /// <summary>
+    /// 未知异常必须以 Error 级别记录，触发告警
+    /// </summary>
+    public override LogLevel GetLogLevel(Exception exception) => LogLevel.Error;
 }

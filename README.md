@@ -6,7 +6,7 @@ TaiPi Core Library for .NET 8.0+，封装通用响应模型、请求模型、中
 
 ```
 Taipi.Core/
-├── RQRS/               # 请求与响应模型
+├── RQRS/                    # 请求与响应模型
 │   ├── StatusResponseResult.cs
 │   ├── ResponseResult.cs
 │   ├── PagerResponse.cs
@@ -15,18 +15,35 @@ Taipi.Core/
 │   ├── SummaryPagerResponseResult.cs
 │   ├── Pager.cs
 │   └── SearchPager.cs
-├── Middleware/          # ASP.NET Core 中间件
+├── Middleware/               # ASP.NET Core 中间件
 │   ├── ExceptionHandlingMiddleware.cs
-│   ├── ExceptionHandlingOptions.cs
 │   ├── RequestLoggingMiddleware.cs
+│   ├── RequestLoggingOptions.cs
 │   └── CorrelationIdMiddleware.cs
-├── Extensions/         # 服务注册扩展方法
-│   ├── TaiPiCoreExtensions.cs
-│   ├── SerilogExtensions.cs
-│   └── RateLimitingExtensions.cs
-├── Exceptions/         # 自定义异常类
-│   └── AppException.cs
-└── Linq/               # LINQ 扩展
+├── Exceptions/              # 异常类 + Handler 策略模式
+│   ├── Abstract/
+│   │   ├── IExceptionHandler.cs
+│   │   └── ExceptionHandlerBase.cs
+│   ├── AppException.cs          # 业务异常基类 + BadRequestException + ForbiddenException
+│   ├── ExceptionHandlingOptions.cs
+│   ├── AppExceptionHandler.cs
+│   ├── BadRequestHandler.cs
+│   ├── ForbiddenHandler.cs
+│   ├── KeyNotFoundHandler.cs
+│   ├── UnauthorizedAccessHandler.cs
+│   ├── ArgumentExceptionHandler.cs
+│   └── UnknownExceptionHandler.cs
+├── Extensions/              # 服务注册扩展方法
+│   ├── ExceptionHandlingExtensions.cs
+│   ├── CorrelationIdExtensions.cs
+│   ├── RequestLoggingExtensions.cs
+│   ├── RateLimitingExtensions.cs
+│   └── SerilogExtensions.cs
+├── Logging/                 # 日志增强
+│   └── SensitiveDataEnricher.cs
+├── Assertions/              # 断言扩展
+│   └── AsseterExtensions.cs
+└── Linq/                    # LINQ 扩展
     ├── IQueryableEx.cs
     └── IEnumerableEx.cs
 ```
@@ -239,37 +256,149 @@ orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 
 统一捕获所有未处理异常，自动转换为标准 `StatusResponseResult` 响应格式。
 
-**异常映射规则：**
+#### 架构：策略模式 + 继承链回退
 
-| 异常类型 | HTTP 状态码 | 业务码 | 说明 |
-|----------|------------|--------|------|
-| `AppException` | 200 | 自定义 | 业务异常，前端在 `.then` 中判断 code |
-| `UnauthorizedAccessException` | 401 | 可配置 | 框架异常，前端在拦截器中处理 |
-| `ArgumentException` | 400 | 可配置 | 参数校验失败 |
-| `KeyNotFoundException` | 404 | 可配置 | 资源不存在 |
-| 其他 | 500 | 可配置 | 未知异常，生产环境隐藏详情 |
+每种异常类型对应一个 `IExceptionHandler<T>` 实现，中间件通过 DI 动态解析：
+
+```
+异常抛出 → 沿继承链查找 Handler → 表达式树编译委托执行 → 返回标准化响应
+```
+
+**关键设计：**
+
+| 特性 | 说明 |
+|------|------|
+| 继承链回退 | `TimeoutException` → 无专属 Handler → 沿链找到 `IExceptionHandler<Exception>` → `UnknownExceptionHandler` |
+| 表达式树编译 | 首次遇到某异常类型后，Handle/GetLogLevel 方法编译为强类型委托，后续调用零反射开销 |
+| 日志级别委托 | 每个 Handler 自行决定 `GetLogLevel`，不再硬编码在中间件中 |
+
+**内置 Handler 映射：**
+
+| 异常类型 | Handler | HTTP 状态码 | 日志级别 | 说明 |
+|----------|---------|------------|---------|------|
+| `AppException` | `AppExceptionHandler` | 200 | Warning | 业务拒绝，前端判断 code |
+| `BadRequestException` | `BadRequestHandler` | 400 | Warning | 参数格式/值不正确 |
+| `ForbiddenException` | `ForbiddenHandler` | 403 | Information | 无权访问 |
+| `UnauthorizedAccessException` | `UnauthorizedAccessHandler` | 401 | Information | Token 过期/无效 |
+| `KeyNotFoundException` | `KeyNotFoundHandler` | 404 | Information | 资源不存在 |
+| `ArgumentException` | `ArgumentExceptionHandler` | 400 | Warning | 框架层参数异常（脱敏） |
+| 其他 | `UnknownExceptionHandler` | 500 | Error | 未知异常，生产环境隐藏详情 |
+
+#### 自定义 Handler
+
+添加自定义异常和 Handler 只需两步：
 
 ```csharp
-// 注册服务（可自定义错误码和消息）
+// 1. 定义异常类
+public class PaymentFailedException(int code, string message) : AppException(code, message);
+
+// 2. 定义 Handler（继承链回退：不注册也行，会回退到 AppExceptionHandler）
+public class PaymentFailedHandler : ExceptionHandlerBase<PaymentFailedException>
+{
+    public PaymentFailedHandler(IWebHostEnvironment env, IOptions<ExceptionHandlingOptions> options) : base(env, options) { }
+
+    public override (int StatusCode, StatusResponseResult Result) Handle(PaymentFailedException exception, HttpContext context)
+        => (StatusCodes.Status200OK, StatusResponseResult.Error(exception.Code, exception.Message));
+
+    public override LogLevel GetLogLevel(PaymentFailedException exception) => LogLevel.Warning;
+}
+
+// 3. 注册（可选，不注册则回退到 AppExceptionHandler）
+builder.Services.AddScoped<IExceptionHandler<PaymentFailedException>, PaymentFailedHandler>();
+```
+
+> 不注册 Handler 时，`PaymentFailedException` 沿继承链找到 `AppExceptionHandler`，返回 HTTP 200 + 业务错误码。
+
+#### 配置项
+
+```csharp
 builder.Services.AddTaiPiExceptionHandling(options =>
 {
     options.UnauthorizedCode = 401;
     options.UnauthorizedMessage = "登录已过期";
     options.NotFoundCode = 404;
     options.NotFoundMessage = "数据不存在";
+    options.ArgumentExceptionCode = 2;
+    options.ArgumentExceptionMessage = "参数错误";
     options.UnknownErrorCode = 9999;
     options.UnknownErrorMessage = "服务器内部错误";
-    // 非生产环境返回完整异常信息
     options.DetailedErrorMessageFactory = ex => ex.ToString();
+    options.EnableDebugHeaderInProduction = false;
+    options.LogException = true;
 });
 
-// 注册中间件
 app.UseTaiPiExceptionHandling();
 ```
 
-**异常响应自动携带 `CorrelationId`**，便于前端与日志关联排查。
+**异常响应自动携带 `CorrelationId`**，便于前端与日志关联排查。所有异常响应自动设置 `Cache-Control: no-store` 防止错误内容被缓存。
 
-### 请求日志中间件
+---
+
+## 异常类与 Handler (`Taipi.Core.Exceptions`)
+
+### IExceptionHandler\<T\>
+
+异常处理程序接口，每种异常类型对应一个实现。
+
+```csharp
+public interface IExceptionHandler<T> where T : Exception
+{
+    (int StatusCode, StatusResponseResult Result) Handle(T exception, HttpContext context);
+    LogLevel GetLogLevel(T exception);
+}
+```
+
+### ExceptionHandlerBase\<T\>
+
+抽象基类，提供 `GetFinalErrorMessage`（生产环境脱敏）和 `IsDevelopment`（调试模式判断），默认 `GetLogLevel` 返回 `Warning`。
+
+### AppException
+
+业务异常基类，中间件捕获后返回 HTTP 200 + 业务错误码，前端在 `.then` 中判断 code。
+
+```csharp
+// 业务规则拒绝
+if (inventory < quantity)
+    throw new AppException(100201, $"库存不足，当前仅剩 {inventory} 件");
+
+// 在 Service 层使用
+public async Task<ClientDto> CreateAsync(ClientRQ request)
+{
+    if (await _repo.ExistsAsync(request.Name))
+        throw new AppException(2001, "客户名称已存在");
+    // ...
+}
+```
+
+### BadRequestException / ForbiddenException
+
+预定义的业务异常子类，分别对应 HTTP 400 和 403。
+
+```csharp
+throw new BadRequestException(3001, "邮箱格式不正确");
+throw new ForbiddenException(4001, "无权访问该资源");
+```
+
+> **与 `ArgumentException` 的区别**：`BadRequestException` 的 Message 是面向用户的友好提示，直接返回客户端；`ArgumentException` 是框架底层抛出的技术异常，消息可能含内部参数名，生产环境会脱敏为"参数错误"。
+
+### 断言扩展 (`Taipi.Core.Assertions`)
+
+```csharp
+using Taipi.Core.Assertions;
+
+// 值为 true 时抛 AppException，为 false 时安全通过
+(alreadyExists).ThrowIfTrue(1001, "记录已存在，不可重复创建");
+
+// 值为 false 时抛 AppException，为 true 时安全通过
+(isValid).ThrowIfFalse(1002, "数据校验失败");
+
+// 值为 true 时执行操作，否则跳过
+(hasUpdate).ExecuteIfTrue(() => ApplyChanges());
+```
+
+---
+
+## 请求日志中间件
 
 一行输出一个请求的完整信息，自动过滤低价值请求。
 
@@ -301,36 +430,6 @@ app.UseRequestLogging();
 
 ```csharp
 app.UseCorrelationId();
-```
-
----
-
-## 异常类 (`Taipi.Core.Exceptions`)
-
-### AppException
-
-业务异常基类，中间件捕获后返回 HTTP 200 + 业务错误码，前端在 `.then` 中判断 code。
-
-```csharp
-// 抛出业务异常
-throw new AppException(1001, "用户名已存在");
-
-// 在服务层使用
-public async Task<ClientDto> CreateAsync(ClientRQ request)
-{
-    if (await _repo.ExistsAsync(request.Name))
-        throw new AppException(2001, "客户名称已存在");
-    // ...
-}
-```
-
-### BadRequestException / ForbiddenException
-
-预定义的业务异常快捷类。
-
-```csharp
-throw new BadRequestException(3001, "邮箱格式不正确");
-throw new ForbiddenException(4001, "无权访问该资源");
 ```
 
 ---
@@ -445,7 +544,7 @@ var query = dbContext.Clients
 ## NuGet
 
 ```xml
-<PackageReference Include="Taipi.Core" Version="1.3.1" />
+<PackageReference Include="Taipi.Core" Version="1.3.10" />
 ```
 
 ### 本地打包
@@ -454,7 +553,7 @@ var query = dbContext.Clients
 dotnet pack -c Release -o ./nupkg
 ```
 
-生成到 `./nupkg/Taipi.Core.1.3.1.nupkg`，其他项目通过本地源引用：
+生成到 `./nupkg/Taipi.Core.1.3.10.nupkg`，其他项目通过本地源引用：
 
 ```bash
 dotnet add <项目> package Taipi.Core -s ./Taipi.Core/nupkg
@@ -463,7 +562,7 @@ dotnet add <项目> package Taipi.Core -s ./Taipi.Core/nupkg
 ### 推送到 NuGet 服务器
 
 ```bash
-dotnet nuget push ./nupkg/Taipi.Core.1.3.1.nupkg --api-key <你的API密钥> --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./nupkg/Taipi.Core.1.3.10.nupkg --api-key <你的API密钥> --source https://api.nuget.org/v3/index.json
 ```
 
 发布新版本时先改 `Taipi.Core.csproj` 里的 `<Version>`，再重新打包推送。

@@ -15,7 +15,12 @@ public abstract class ExceptionHandlerBase<T> : IExceptionHandler<T> where T : E
 
     protected string GetFinalErrorMessage(T exception, HttpContext context, string defaultErrorMessage)
     {
-        return IsDevelopment(context) ? _options.DetailedErrorMessageFactory(exception) : defaultErrorMessage;
+        if (!IsDevelopment(context))
+
+        {
+            return defaultErrorMessage;
+        }
+        return _options.DetailedErrorMessageFactory?.Invoke(exception) ?? exception.Message;
     }
 
     protected bool IsDevelopment(HttpContext context)
@@ -24,4 +29,9 @@ public abstract class ExceptionHandlerBase<T> : IExceptionHandler<T> where T : E
     }
 
     public abstract (int StatusCode, StatusResponseResult Result) Handle(T exception, HttpContext context);
+
+    /// <summary>
+    /// 默认日志级别为 Warning，子类可按需覆盖
+    /// </summary>
+    public virtual LogLevel GetLogLevel(T exception) => LogLevel.Warning;
 }

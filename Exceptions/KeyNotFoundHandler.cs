@@ -20,4 +20,9 @@ public class KeyNotFoundHandler : ExceptionHandlerBase<KeyNotFoundException>
     {
         return (StatusCodes.Status404NotFound, StatusResponseResult.Error(_options.NotFoundCode, GetFinalErrorMessage(exception, context, _options.NotFoundMessage)));
     }
+
+    /// <summary>
+    /// 资源不存在属于常见业务场景，用 Information 避免产生过多告警
+    /// </summary>
+    public override LogLevel GetLogLevel(KeyNotFoundException exception) => LogLevel.Information;
 }

@@ -12,7 +12,7 @@ namespace Taipi.Core.Exceptions;
 /// <para><b>处理策略：</b></para>
 /// <list type="bullet">
 ///   <item><description>返回 HTTP 状态码 400 Bad Request</description></item>
-///   <item><description>直接透传 <see cref="BadRequestException.Code"/> 和 <see cref="BadRequestException.Message"/></description></item>
+///   <item><description>直接透传 Code 和 Message</description></item>
 ///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法</description></item>
 /// </list>
 /// <para><b>原因：</b></para>

@@ -14,4 +14,11 @@ public interface IExceptionHandler<T> where T : Exception
     /// <param name="context">当前 HTTP 上下文</param>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     (int StatusCode, StatusResponseResult Result) Handle(T exception, HttpContext context);
+
+    /// <summary>
+    /// 获取该异常的日志级别，由各 Handler 自行决定
+    /// </summary>
+    /// <param name="exception">要处理的异常实例</param>
+    /// <returns>日志级别</returns>
+    LogLevel GetLogLevel(T exception);
 }

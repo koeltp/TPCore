@@ -2,15 +2,15 @@ using Taipi.Core.Exceptions;
 
 namespace Taipi.Core.Assertions
 {
-    public static class AsseterExtensions
+    public static class AssertExtensions
     {
         /// <summary>
-        /// 断言为False时抛出异常
+        /// 值为 false 时抛出 AppException，为 true 时安全通过
         /// </summary>
         /// <param name="r">布尔值</param>
         /// <param name="errorCode">错误码</param>
         /// <param name="errorMsg">错误信息</param>
-        public static void MustBeFalse(this bool r, int errorCode, string errorMsg)
+        public static void ThrowIfFalse(this bool r, int errorCode, string errorMsg)
         {
             if (!r)
             {
@@ -19,12 +19,12 @@ namespace Taipi.Core.Assertions
         }
 
         /// <summary>
-        /// 断言为True时抛出异常
+        /// 值为 true 时抛出 AppException，为 false 时安全通过
         /// </summary>
         /// <param name="r">布尔值</param>
         /// <param name="errorCode">错误码</param>
         /// <param name="errorMsg">错误信息</param>
-        public static void MustBeTrue(this bool r, int errorCode, string errorMsg)
+        public static void ThrowIfTrue(this bool r, int errorCode, string errorMsg)
         {
             if (r)
             {
@@ -33,7 +33,7 @@ namespace Taipi.Core.Assertions
         }
 
         /// <summary>
-        /// 如果为真, 则执行操作
+        /// 值为 true 时执行操作，否则跳过
         /// </summary>
         /// <param name="predicates">布尔值</param>
         /// <param name="action">操作</param>
