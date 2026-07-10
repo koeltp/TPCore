@@ -71,7 +71,10 @@ public class ExceptionHandlingMiddleware
         // 2. 附加 CorrelationId
         result.CorrelationId = context.Items["CorrelationId"] as string;
 
-        // 3. 记录异常日志（日志级别由 Handler 决定）
+        // 3. 将日志级别存入 HttpContext.Items，供下游中间件（如请求日志）使用
+        context.Items["ExceptionLogLevel"] = logLevel;
+
+        // 4. 记录异常日志（日志级别由 Handler 决定）
         if (_options.LogException)
         {
             var errorMessage = IsDebugMode(context)

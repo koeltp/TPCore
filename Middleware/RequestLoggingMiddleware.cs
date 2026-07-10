@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 using Microsoft.IO;
+using Taipi.Core.Exceptions.Abstract;
 
 namespace Taipi.Core.Middleware;
 
@@ -91,7 +92,7 @@ public class RequestLoggingMiddleware
             }
 
             var statusCode = context.Response.StatusCode;
-            var logLevel = GetLogLevel(statusCode, responseBody, caughtException);
+            var logLevel = GetLogLevel(statusCode, responseBody, caughtException, context);
 
             if (!string.IsNullOrEmpty(responseBody) && IsBusinessError(responseBody, out var errorCode, out var errorMsg))
             {
@@ -114,10 +115,17 @@ public class RequestLoggingMiddleware
         }
     }
 
-    private LogLevel GetLogLevel(int statusCode, string responseBody, Exception? exception)
+    private LogLevel GetLogLevel(int statusCode, string responseBody, Exception? exception, HttpContext context)
     {
+        // 1. 异常被本中间件直接捕获（异常处理中间件未介入），委托给 Handler 决定日志级别
         if (exception != null)
-            return LogLevel.Error;
+            return GetExceptionLogLevel(exception, context.RequestServices);
+
+        // 2. 异常已被异常处理中间件处理，通过 HttpContext.Items 传递日志级别
+        if (context.Items["ExceptionLogLevel"] is LogLevel handlerLogLevel)
+            return handlerLogLevel;
+
+        // 3. 无异常，按状态码判断
         if (statusCode >= 500)
             return LogLevel.Error;
         if (statusCode >= 400)
@@ -128,6 +136,30 @@ public class RequestLoggingMiddleware
                 return _options.BusinessErrorLogLevel;
         }
         return LogLevel.Information;
+    }
+
+    /// <summary>
+    /// 委托给 <see cref="IExceptionHandler{T}.GetLogLevel"/> 决定异常日志级别，与异常处理中间件保持一致
+    /// </summary>
+    private static LogLevel GetExceptionLogLevel(Exception exception, IServiceProvider serviceProvider)
+    {
+        var currentType = exception.GetType();
+        while (currentType != null && currentType != typeof(object))
+        {
+            var handlerType = typeof(IExceptionHandler<>).MakeGenericType(currentType);
+            var handler = serviceProvider.GetService(handlerType);
+            if (handler != null)
+            {
+                var getLogLevelMethod = handlerType.GetMethod(nameof(IExceptionHandler<Exception>.GetLogLevel));
+                if (getLogLevelMethod != null)
+                {
+                    return (LogLevel)getLogLevelMethod.Invoke(handler, [exception])!;
+                }
+            }
+            currentType = currentType.BaseType;
+        }
+        // 没有找到 Handler，回退到 Error
+        return LogLevel.Error;
     }
 
     private bool IsBusinessError(string responseBody, out string? errorCode, out string? errorMessage)

@@ -81,8 +81,8 @@ var app = builder.Build();
 
 // 中间件顺序很重要
 app.UseCorrelationId();              // 链路追踪（最先注册）
-app.UseTaiPiExceptionHandling();     // 全局异常处理
-app.UseRequestLogging();             // 请求日志
+app.UseRequestLogging();             // 请求日志（外层，能观察到异常处理后的正确状态码）
+app.UseTaiPiExceptionHandling();     // 全局异常处理（内层，靠近端点，先捕获异常）
 app.UseRateLimiter();                // 速率限制
 
 app.Run();
@@ -479,7 +479,8 @@ builder.Host.UseSerilogFromConfiguration();
 
 // 3. 注册日志中间件
 app.UseCorrelationId();      // 链路追踪（最先注册）
-app.UseRequestLogging();     // 请求日志
+app.UseRequestLogging();     // 请求日志（外层）
+// app.UseTaiPiExceptionHandling(); // 异常处理应注册在请求日志之后（内层，靠近端点）
 ```
 
 **appsettings.json 示例：**
