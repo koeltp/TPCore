@@ -1,3 +1,5 @@
+using Taipi.Core.Exceptions;
+
 namespace Taipi.Core.RQRS;
 
 /// <summary>
@@ -41,7 +43,7 @@ public class OrderByRQ
     /// 排序字段名，仅允许字母、数字、下划线、点号及方括号，
     /// 赋值时严格校验以防止 SQL 注入
     /// </summary>
-    /// <exception cref="ArgumentException">字段名包含非法字符时抛出</exception>
+    /// <exception cref="ValidationException">字段名包含非法字符时抛出</exception>
     public string Field
     {
         get => _field;
@@ -54,7 +56,7 @@ public class OrderByRQ
             }
             // 白名单校验：仅允许合法的数据库标识符字符，拦截 SQL 注入
             if (!IsValidFieldName(value))
-                throw new ArgumentException($"非法排序字段名: {value}", nameof(value));
+                throw new ValidationException(AppCodes.InvalidSortField, $"非法排序字段名: {value}");
             _field = value.Trim();
         }
     }

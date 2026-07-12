@@ -17,7 +17,8 @@ public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(ForbiddenException exception, HttpContext context)
     {
-        return (StatusCodes.Status403Forbidden, StatusResponseResult.Error(exception.Code, exception.Message));
+        var code = AppCodes.Mapper(exception.Code, _options);
+        return (StatusCodes.Status403Forbidden, StatusResponseResult.Error(code, exception.Message));
     }
 
     /// <summary>

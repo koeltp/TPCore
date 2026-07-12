@@ -24,27 +24,20 @@ namespace Taipi.Core.Exceptions;
 ///   <item><description>重复请求/幂等性校验失败</description></item>
 /// </list>
 /// 
-/// <para><b>与 <see cref="BadRequestException"/> 的区别：</b></para>
+/// <para><b>与 <see cref="ValidationException"/> 的区别：</b></para>
 /// <para>
-///   <see cref="BadRequestException"/> 表示"请求参数格式/值不正确"（如邮箱格式错误、必填字段为空），
+///   <see cref="ValidationException"/> 表示"请求参数格式/值不正确"（如邮箱格式错误、必填字段为空），
 ///   属于 HTTP 400（客户端请求错误）。而 <see cref="AppException"/> 表示"请求参数没问题，
 ///   但业务规则不允许执行"，属于 HTTP 200（请求成功处理，但业务被拒绝）。
 /// </para>
 /// <para>
-///   从 HTTP 语义角度：<see cref="BadRequestException"/> 意味着"客户端发来的东西是错的"；
+///   从 HTTP 语义角度：<see cref="ValidationException"/> 意味着"客户端发来的东西是错的"；
 ///   <see cref="AppException"/> 意味着"服务器理解了请求，但业务规则说不让做"。
-/// </para>
-/// 
-/// <para><b>与 <see cref="ArgumentExceptionHandler"/> 的区别：</b></para>
-/// <para>
-///   <see cref="ArgumentException"/> 是框架底层抛出的技术异常（如反序列化失败、类型转换失败），
-///   其消息可能包含内部参数名，生产环境应脱敏。而 <see cref="AppException"/> 是业务层主动抛出的
-///   友好异常，其 Message 是面向最终用户的业务提示（如 "库存不足，当前仅剩 5 件"），应直接返回。
 /// </para>
 /// 
 /// <para><b>⚠️ 重要约定：</b></para>
 /// <para>
-///   业务代码中 <b>优先使用具体的子类</b>（如 <see cref="BadRequestException"/>、<see cref="ForbiddenException"/>），
+///   业务代码中 <b>优先使用具体的子类</b>（如 <see cref="ValidationException"/>、<see cref="ForbiddenException"/>），
 ///   仅在以上子类都不适用时，才直接抛出 <see cref="AppException"/>。
 /// </para>
 /// <para>
@@ -78,6 +71,7 @@ public class AppExceptionHandler : ExceptionHandlerBase<AppException>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(AppException exception, HttpContext context)
     {
-        return (StatusCodes.Status200OK, StatusResponseResult.Error(exception.Code, exception.Message));
+        var code = AppCodes.Mapper(exception.Code, _options);
+        return (StatusCodes.Status200OK, StatusResponseResult.Error(code, exception.Message));
     }
 }

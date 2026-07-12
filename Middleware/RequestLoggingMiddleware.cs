@@ -97,8 +97,8 @@ public class RequestLoggingMiddleware
             if (!string.IsNullOrEmpty(responseBody) && IsBusinessError(responseBody, out var errorCode, out var errorMsg))
             {
                 _logger.Log(logLevel,
-                    "{Method} {Path}{Query} → {StatusCode} (业务错误: {ErrorCode} - {ErrorMsg}) ({ElapsedMs}ms) [Resp: {ResponseBody}]",
-                    method, path, queryString, statusCode, errorCode, errorMsg, stopwatch.ElapsedMilliseconds, responseBody);
+                    "{Method} {Path}{Query} → {StatusCode} (业务错误: {ErrorCode} - {ErrorMsg}) ({ElapsedMs}ms)",
+                    method, path, queryString, statusCode, errorCode, errorMsg, stopwatch.ElapsedMilliseconds);
             }
             else if (!string.IsNullOrEmpty(requestBody))
             {

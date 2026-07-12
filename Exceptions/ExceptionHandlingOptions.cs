@@ -1,44 +1,19 @@
-﻿namespace Taipi.Core.Exceptions;
+namespace Taipi.Core.Exceptions;
 
 /// <summary>
-/// 全局异常处理中间件配置项，项目可覆盖框架异常的错误码和消息
+/// 全局异常处理中间件配置项
 /// </summary>
 public class ExceptionHandlingOptions
 {
     /// <summary>
-    /// 未授权异常的错误码
+    /// 排序字段名非法的错误码，默认 <see cref="AppCodes.InvalidSortField"/>
     /// </summary>
-    public int UnauthorizedCode { get; set; } = 1;
+    public int InvalidSortFieldErrorCode { get; set; } = AppCodes.InvalidSortField;
 
     /// <summary>
-    /// 未授权异常的提示消息
+    /// 未知异常的错误码，默认 <see cref="AppCodes.Unknown"/>
     /// </summary>
-    public string UnauthorizedMessage { get; set; } = "未授权";
-
-    /// <summary>
-    /// 参数错误异常的错误码
-    /// </summary>
-    public int ArgumentExceptionCode { get; set; } = 2;
-
-    /// <summary>
-    /// 参数错误异常的提示消息
-    /// </summary>
-    public string ArgumentExceptionMessage { get; set; } = "参数错误";
-
-    /// <summary>
-    /// 资源不存在异常的错误码
-    /// </summary>
-    public int NotFoundCode { get; set; } = 3;
-
-    /// <summary>
-    /// 资源不存在异常的提示消息
-    /// </summary>
-    public string NotFoundMessage { get; set; } = "资源不存在";
-
-    /// <summary>
-    /// 未知异常的错误码
-    /// </summary>
-    public int UnknownErrorCode { get; set; } = 9999;
+    public int UnknownErrorCode { get; set; } = AppCodes.Unknown;
 
     /// <summary>
     /// 生产环境下的未知异常提示消息

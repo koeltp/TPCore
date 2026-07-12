@@ -24,14 +24,12 @@ Taipi.Core/
 │   ├── Abstract/
 │   │   ├── IExceptionHandler.cs
 │   │   └── ExceptionHandlerBase.cs
-│   ├── AppException.cs          # 业务异常基类 + BadRequestException + ForbiddenException
+│   ├── AppCodes.cs               # 框架级错误码常量
+│   ├── AppException.cs          # 业务异常基类 + ValidationException + ForbiddenException
 │   ├── ExceptionHandlingOptions.cs
 │   ├── AppExceptionHandler.cs
-│   ├── BadRequestHandler.cs
+│   ├── ValidationHandler.cs
 │   ├── ForbiddenHandler.cs
-│   ├── KeyNotFoundHandler.cs
-│   ├── UnauthorizedAccessHandler.cs
-│   ├── ArgumentExceptionHandler.cs
 │   └── UnknownExceptionHandler.cs
 ├── Extensions/              # 服务注册扩展方法
 │   ├── ExceptionHandlingExtensions.cs
@@ -244,7 +242,7 @@ new OrderByRQ { Field = "CreateTime", Type = 1 }   // 降序
 // 转换为 SQL ORDER BY 子句
 orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 
-// 非法字段名会在赋值时抛出 ArgumentException
+// 非法字段名会在赋值时抛出 ValidationException（错误码 AppCodes.InvalidSortField，可通过 Options 覆盖）
 // new OrderByRQ { Field = "1; DROP TABLE Users" };  // 抛出异常
 ```
 
@@ -277,12 +275,9 @@ orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 | 异常类型 | Handler | HTTP 状态码 | 日志级别 | 说明 |
 |----------|---------|------------|---------|------|
 | `AppException` | `AppExceptionHandler` | 200 | Warning | 业务拒绝，前端判断 code |
-| `BadRequestException` | `BadRequestHandler` | 400 | Warning | 参数格式/值不正确 |
+| `ValidationException` | `ValidationHandler` | 400 | Warning | 输入校验失败 |
 | `ForbiddenException` | `ForbiddenHandler` | 403 | Information | 无权访问 |
-| `UnauthorizedAccessException` | `UnauthorizedAccessHandler` | 401 | Information | Token 过期/无效 |
-| `KeyNotFoundException` | `KeyNotFoundHandler` | 404 | Information | 资源不存在 |
-| `ArgumentException` | `ArgumentExceptionHandler` | 400 | Warning | 框架层参数异常（脱敏） |
-| 其他 | `UnknownExceptionHandler` | 500 | Error | 未知异常，生产环境隐藏详情 |
+| 其他 | `UnknownExceptionHandler` | 500 | Error | 系统异常，生产环境隐藏详情 |
 
 #### 自定义 Handler
 
@@ -314,13 +309,9 @@ builder.Services.AddScoped<IExceptionHandler<PaymentFailedException>, PaymentFai
 ```csharp
 builder.Services.AddTaiPiExceptionHandling(options =>
 {
-    options.UnauthorizedCode = 401;
-    options.UnauthorizedMessage = "登录已过期";
-    options.NotFoundCode = 404;
-    options.NotFoundMessage = "数据不存在";
-    options.ArgumentExceptionCode = 2;
-    options.ArgumentExceptionMessage = "参数错误";
-    options.UnknownErrorCode = 9999;
+    options.InvalidSortFieldErrorCode = AppCodes.InvalidSortField;  // 默认 1
+    options.ForbiddenErrorCode = AppCodes.Forbidden;     // 默认 3
+    options.UnknownErrorCode = AppCodes.Unknown;         // 默认 9999
     options.UnknownErrorMessage = "服务器内部错误";
     options.DetailedErrorMessageFactory = ex => ex.ToString();
     options.EnableDebugHeaderInProduction = false;
@@ -370,16 +361,14 @@ public async Task<ClientDto> CreateAsync(ClientRQ request)
 }
 ```
 
-### BadRequestException / ForbiddenException
+### ValidationException / ForbiddenException
 
 预定义的业务异常子类，分别对应 HTTP 400 和 403。
 
 ```csharp
-throw new BadRequestException(3001, "邮箱格式不正确");
+throw new ValidationException(3001, "邮箱格式不正确");
 throw new ForbiddenException(4001, "无权访问该资源");
 ```
-
-> **与 `ArgumentException` 的区别**：`BadRequestException` 的 Message 是面向用户的友好提示，直接返回客户端；`ArgumentException` 是框架底层抛出的技术异常，消息可能含内部参数名，生产环境会脱敏为"参数错误"。
 
 ### 断言扩展 (`Taipi.Core.Assertions`)
 

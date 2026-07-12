@@ -25,11 +25,8 @@ public static class ExceptionHandlingExtensions
             services.Configure<ExceptionHandlingOptions>(_ => { });
 
         services.AddScoped<IExceptionHandler<AppException>, AppExceptionHandler>();
-        services.AddScoped<IExceptionHandler<ArgumentException>, ArgumentExceptionHandler>();
-        services.AddScoped<IExceptionHandler<BadRequestException>, BadRequestHandler>();        
+        services.AddScoped<IExceptionHandler<ValidationException>, ValidationHandler>();        
         services.AddScoped<IExceptionHandler<ForbiddenException>, ForbiddenHandler>();
-        services.AddScoped<IExceptionHandler<KeyNotFoundException>, KeyNotFoundHandler>();
-        services.AddScoped<IExceptionHandler<UnauthorizedAccessException>, UnauthorizedAccessHandler>();
         services.AddScoped<IExceptionHandler<Exception>, UnknownExceptionHandler>();
         return services;
     }
