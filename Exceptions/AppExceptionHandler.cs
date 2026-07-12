@@ -66,7 +66,7 @@ public class AppExceptionHandler : ExceptionHandlerBase<AppException>
     /// <summary>
     /// 处理 AppException 异常
     /// </summary>
-    /// <param name="exception">要处理的 AppException 实例实例</param>
+    /// <param name="exception">要处理的 AppException 实例</param>
     /// <param name="context">当前 HTTP 上下文</param>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(AppException exception, HttpContext context)
@@ -74,4 +74,9 @@ public class AppExceptionHandler : ExceptionHandlerBase<AppException>
         var code = AppCodes.Mapper(exception.Code, _options);
         return (StatusCodes.Status200OK, StatusResponseResult.Error(code, exception.Message));
     }
+
+    /// <summary>
+    /// 业务规则拒绝属于正常业务分支，但保留 Warning 以便排查业务异常频率
+    /// </summary>
+    public override LogLevel GetLogLevel(AppException exception) => LogLevel.Warning;
 }

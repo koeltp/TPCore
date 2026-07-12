@@ -37,4 +37,9 @@ public class ValidationHandler : ExceptionHandlerBase<ValidationException>
         var code = AppCodes.Mapper(exception.Code, _options);
         return (StatusCodes.Status400BadRequest, StatusResponseResult.Error(code, exception.Message));
     }
+
+    /// <summary>
+    /// 参数校验失败属于正常业务分支，用 Information 避免产生过多告警
+    /// </summary>
+    public override LogLevel GetLogLevel(ValidationException exception) => LogLevel.Information;
 }

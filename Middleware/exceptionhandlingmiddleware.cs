@@ -11,6 +11,10 @@ using System.Collections.Concurrent;
 
 namespace Taipi.Core.Middleware;
 
+/// <summary>
+/// 全局异常处理中间件：捕获管道中的异常，沿继承链查找 Handler 处理，
+/// 编译委托缓存以优化性能，未匹配的异常回退到 UnknownExceptionHandler
+/// </summary>
 public class ExceptionHandlingMiddleware
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -86,7 +90,7 @@ public class ExceptionHandlingMiddleware
             _logger.Log(logLevel, exception, "请求处理异常: {Message}", errorMessage);
         }
 
-        // 4. 写入响应
+        // 5. 写入响应
         context.Response.StatusCode = httpStatusCode;
         context.Response.ContentType = "application/json";
 
@@ -126,16 +130,18 @@ public class ExceptionHandlingMiddleware
     }
 
     /// <summary>
-    /// 沿异常继承链向上查找 DI 中已注册的 Handler，确保未注册的异常类型能回退到基类 Handler
+    /// 沿异常继承链向上查找 DI 中已注册的 Handler，确保未注册的异常类型能回退到基类 Handler。
+    /// 使用 IServiceProviderIsService 探测注册信息，避免在探测阶段创建实例。
     /// </summary>
     private static Type ResolveHandlerType(Type exceptionType, IServiceProvider serviceProvider)
     {
+        var providerIsService = serviceProvider.GetService(typeof(IServiceProviderIsService)) as IServiceProviderIsService;
         var currentType = exceptionType;
         while (currentType != null && currentType != typeof(object))
         {
             var candidate = typeof(IExceptionHandler<>).MakeGenericType(currentType);
-            // 用 GetService 探测是否注册，不创建实例
-            if (serviceProvider.GetService(candidate) != null)
+            // 优先使用 IServiceProviderIsService 判断注册（不创建实例），回退到 GetService
+            if (providerIsService?.IsService(candidate) == true || serviceProvider.GetService(candidate) != null)
             {
                 return candidate;
             }

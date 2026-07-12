@@ -21,17 +21,14 @@ public static class ExceptionHandlingExtensions
     {
         if (configure != null)
             services.Configure(configure);
-        else
-            services.Configure<ExceptionHandlingOptions>(_ => { });
 
+        // 注册顺序不影响 Handler 匹配（中间件通过继承链回退），按从具体到一般排列仅为了可读性
         services.AddScoped<IExceptionHandler<AppException>, AppExceptionHandler>();
-        services.AddScoped<IExceptionHandler<ValidationException>, ValidationHandler>();        
+        services.AddScoped<IExceptionHandler<ValidationException>, ValidationHandler>();
         services.AddScoped<IExceptionHandler<ForbiddenException>, ForbiddenHandler>();
         services.AddScoped<IExceptionHandler<Exception>, UnknownExceptionHandler>();
         return services;
     }
-
-
 
     /// <summary>
     /// 使用全局异常处理中间件

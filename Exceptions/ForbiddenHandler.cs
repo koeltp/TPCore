@@ -12,7 +12,7 @@ public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
     /// <summary>
     /// 处理 ForbiddenException 异常
     /// </summary>
-    /// <param name="exception">要处理的 ForbiddenException 实例实例</param>
+    /// <param name="exception">要处理的 ForbiddenException 实例</param>
     /// <param name="context">当前 HTTP 上下文</param>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(ForbiddenException exception, HttpContext context)
