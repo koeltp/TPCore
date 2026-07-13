@@ -40,7 +40,7 @@ public static class SerilogExtensions
 
     /// <summary>
     /// 配置 Host 使用 Serilog，从 appsettings 和 DI 容器读取完整配置。
-    /// 已集成 FromLogContext，如需全局脱敏请在外部添加 .Enrich.With&lt;SensitiveDataEnricher&gt;()
+    /// 已集成 FromLogContext 和全局脱敏（SensitiveDataEnricher）
     /// </summary>
     public static IHostBuilder UseSerilogFromConfiguration(this IHostBuilder hostBuilder)
     {
@@ -50,8 +50,7 @@ public static class SerilogExtensions
                 .ReadFrom.Configuration(context.Configuration)
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext()
-                // 如果需要全局脱敏，取消下面注释并实现 SensitiveDataEnricher
-            .Enrich.With<SensitiveDataEnricher>();
+                .Enrich.With<SensitiveDataEnricher>();
         });
     }
 

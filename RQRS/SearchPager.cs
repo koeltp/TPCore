@@ -6,6 +6,8 @@ namespace Taipi.Core.RQRS;
 /// <typeparam name="T">搜索条件的类型</typeparam>
 public class SearchPager<T> : Pager
 {
-    /// <summary>搜索/筛选条件</summary>
+    /// <summary>
+    /// 搜索/筛选条件，由调用方在构造后赋值
+    /// </summary>
     public T Condition { get; set; } = default!;
 }

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Threading.RateLimiting;
 
 namespace Taipi.Core.Extensions;
@@ -24,7 +25,7 @@ public static class RateLimitingExtensions
             // 全局默认策略：每 IP 滑动窗口限流
             limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
-                var clientIp = GetClientIp(context);
+                var clientIp = GetClientIp(context, options);
                 return RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: clientIp,
                     factory: _ => new SlidingWindowRateLimiterOptions
@@ -40,7 +41,7 @@ public static class RateLimitingExtensions
             // Token 端点策略：严格限流，防暴力破解
             limiterOptions.AddPolicy(RateLimitPolicies.TokenEndpoint, context =>
             {
-                var clientIp = GetClientIp(context);
+                var clientIp = GetClientIp(context, options);
                 return RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: clientIp,
                     factory: _ => new SlidingWindowRateLimiterOptions
@@ -56,7 +57,7 @@ public static class RateLimitingExtensions
             // 登录端点策略：严格限流，防暴力破解
             limiterOptions.AddPolicy(RateLimitPolicies.LoginEndpoint, context =>
             {
-                var clientIp = GetClientIp(context);
+                var clientIp = GetClientIp(context, options);
                 return RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: clientIp,
                     factory: _ => new SlidingWindowRateLimiterOptions
@@ -72,7 +73,7 @@ public static class RateLimitingExtensions
             // 外部登录端点策略：防 OAuth 滥用
             limiterOptions.AddPolicy(RateLimitPolicies.ExternalLoginEndpoint, context =>
             {
-                var clientIp = GetClientIp(context);
+                var clientIp = GetClientIp(context, options);
                 return RateLimitPartition.GetSlidingWindowLimiter(
                     partitionKey: clientIp,
                     factory: _ => new SlidingWindowRateLimiterOptions
@@ -99,19 +100,36 @@ public static class RateLimitingExtensions
     }
 
     /// <summary>
-    /// 获取客户端真实 IP，优先使用 X-Forwarded-For（反向代理场景）
+    /// 获取客户端真实 IP。仅在请求来自受信代理时才读取 X-Forwarded-For，
+    /// 防止攻击者伪造该头绕过 IP 限流
     /// </summary>
-    private static string GetClientIp(HttpContext context)
+    private static string GetClientIp(HttpContext context, RateLimitingOptions options)
     {
-        var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(forwardedFor))
+        var remoteIp = context.Connection.RemoteIpAddress;
+
+        // 仅当 RemoteIpAddress 属于受信代理时，才信任 X-Forwarded-For
+        if (remoteIp != null && (options.KnownProxies.Count > 0 || options.KnownNetworks.Count > 0))
         {
-            // X-Forwarded-For 可能包含多个 IP，取第一个（最原始的客户端 IP）
-            return forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .First().Trim();
+            var isTrusted = options.KnownProxies.Any(proxy => proxy.Equals(remoteIp));
+
+            // 也检查 KnownNetworks
+            if (!isTrusted)
+            {
+                isTrusted = options.KnownNetworks.Any(network => network.Contains(remoteIp));
+            }
+
+            if (isTrusted)
+            {
+                var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+                if (!string.IsNullOrEmpty(forwardedFor))
+                {
+                    return forwardedFor.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        .First().Trim();
+                }
+            }
         }
 
-        return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return remoteIp?.ToString() ?? "unknown";
     }
 }
 
@@ -120,8 +138,13 @@ public static class RateLimitingExtensions
 /// </summary>
 public static class RateLimitPolicies
 {
+    /// <summary>Token 端点策略名</summary>
     public const string TokenEndpoint = "token_endpoint";
+
+    /// <summary>登录端点策略名</summary>
     public const string LoginEndpoint = "login_endpoint";
+
+    /// <summary>外部登录端点策略名</summary>
     public const string ExternalLoginEndpoint = "external_login_endpoint";
 }
 
@@ -165,4 +188,66 @@ public class RateLimitingOptions
 
     /// <summary>外部登录端点：滑动窗口分段数，默认 4</summary>
     public int ExternalLoginSegments { get; set; } = 4;
+
+    /// <summary>
+    /// 受信代理 IP 列表。仅来自这些 IP 的请求才会读取 X-Forwarded-For 头。
+    /// 为空时（默认）不信任任何代理，直接使用 RemoteIpAddress，防止 IP 伪造绕过限流
+    /// </summary>
+    public List<IPAddress> KnownProxies { get; set; } = [];
+
+    /// <summary>
+    /// 受信网络列表（CIDR 格式）。仅来自这些网络的请求才会读取 X-Forwarded-For 头
+    /// </summary>
+    public List<IPNetwork> KnownNetworks { get; set; } = [];
+}
+
+/// <summary>
+/// 表示一个 IP 网络段（CIDR），用于判断某个 IP 是否属于受信网络
+/// </summary>
+public class IPNetwork
+{
+    /// <summary>网络地址</summary>
+    public IPAddress Address { get; }
+
+    /// <summary>前缀长度（CIDR 中的 /n）</summary>
+    public int PrefixLength { get; }
+
+    private readonly byte[] _networkBytes;
+
+    /// <summary>
+    /// 创建 IP 网络段
+    /// </summary>
+    /// <param name="address">网络地址</param>
+    /// <param name="prefixLength">前缀长度（如 24 表示 /24）</param>
+    public IPNetwork(IPAddress address, int prefixLength)
+    {
+        Address = address;
+        PrefixLength = prefixLength;
+        _networkBytes = address.GetAddressBytes();
+    }
+
+    /// <summary>
+    /// 判断指定 IP 是否属于本网络段
+    /// </summary>
+    public bool Contains(IPAddress ip)
+    {
+        var ipBytes = ip.GetAddressBytes();
+        if (ipBytes.Length != _networkBytes.Length) return false;
+
+        var fullBytes = PrefixLength / 8;
+        var remainingBits = PrefixLength % 8;
+
+        for (var i = 0; i < fullBytes; i++)
+        {
+            if (ipBytes[i] != _networkBytes[i]) return false;
+        }
+
+        if (remainingBits > 0 && fullBytes < _networkBytes.Length)
+        {
+            var mask = (byte)(0xFF << (8 - remainingBits));
+            if ((ipBytes[fullBytes] & mask) != (_networkBytes[fullBytes] & mask)) return false;
+        }
+
+        return true;
+    }
 }

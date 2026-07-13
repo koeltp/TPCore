@@ -14,7 +14,7 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     public SummaryPagerResponseResult() { }
 
     /// <summary>
-    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 200
+    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 0（成功）
     /// </summary>
     /// <param name="items">当前页的数据列表</param>
     /// <param name="summary">汇总数据（如合计值、统计信息等）</param>
@@ -33,7 +33,7 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
         };
     }
     /// <summary>
-    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 200
+    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 0（成功）
     /// </summary>
     /// <param name="items">当前页的数据列表</param>
     /// <param name="summary">汇总数据（如合计值、统计信息等）</param>
@@ -42,7 +42,7 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     public SummaryPagerResponseResult(IEnumerable<T1> items, T2 summary, Pager pager, int totalCount) : this(items, summary, pager.PageIndex, pager.PageSize, totalCount) { }
 
     /// <summary>
-    /// 成功响应（状态码200），携带分页数据和汇总信息
+    /// 成功响应，携带分页数据和汇总信息
     /// </summary>
     /// <param name="items">当前页的数据列表</param>
     /// <param name="summary">汇总数据（如合计值、统计信息等）</param>
@@ -51,11 +51,11 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     /// <param name="totalCount">总记录数</param>
     public static SummaryPagerResponseResult<T1, T2> Success(IEnumerable<T1> items, T2 summary, int pageIndex, int pageSize, int totalCount)
     {
-        return new SummaryPagerResponseResult<T1, T2>(items, summary, pageIndex, pageSize, totalCount);
+        return new SummaryPagerResponseResult<T1, T2>(items, summary, pageIndex, pageSize, totalCount) { Message = "操作成功" };
     }
 
     /// <summary>
-    /// 成功响应（状态码200），携带分页数据和汇总信息
+    /// 成功响应，携带分页数据和汇总信息
     /// </summary>
     /// <param name="items">当前页的数据列表</param>
     /// <param name="summary">汇总数据（如合计值、统计信息等）</param>
@@ -63,13 +63,12 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     /// <param name="totalCount">总记录数</param>
     public static SummaryPagerResponseResult<T1, T2> Success(IEnumerable<T1> items, T2 summary, Pager pager, int totalCount)
     {
-        return new SummaryPagerResponseResult<T1, T2>(items, summary, pager, totalCount);
+        return new SummaryPagerResponseResult<T1, T2>(items, summary, pager, totalCount) { Message = "操作成功" };
     }
     /// <summary>
-    /// 错误响应，状态码与消息均由调用者指定
+    /// 错误响应，返回当前泛型类型的实例。
+    /// 使用 <see langword="new"/> 隐藏基类方法以返回具体子类型，调用者应始终使用具体类型调用
     /// </summary>
-    /// <param name="code">错误状态码</param>
-    /// <param name="message">错误描述信息</param>
     public static new SummaryPagerResponseResult<T1, T2> Error(int code, string message)
     {
         return new SummaryPagerResponseResult<T1, T2> { Code = code, Message = message };

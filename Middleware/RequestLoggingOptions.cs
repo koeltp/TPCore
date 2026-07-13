@@ -1,5 +1,4 @@
-
-namespace Taipi.Core.Middleware;
+namespace Taipi.Core.Middleware;
 
 /// <summary>
 /// 请求日志记录中间件选项

@@ -42,7 +42,8 @@ public class ResponseResult<T> : StatusResponseResult
     }
 
     /// <summary>
-    /// 错误响应，业务错误码和消息由调用者指定
+    /// 错误响应，返回当前泛型类型的实例。
+    /// 使用 <see langword="new"/> 隐藏基类方法以返回具体子类型，调用者应始终使用具体类型调用
     /// </summary>
     public static new ResponseResult<T> Error(int code, string message)
     {

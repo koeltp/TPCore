@@ -65,9 +65,9 @@ public class SensitiveDataEnricher : ILogEventEnricher
             var prefix = match.Groups["prefix"].Value;
             var value = match.Groups["value"].Value;
             // 保留引号风格
-            if (value.StartsWith("\"") && value.EndsWith("\""))
+            if (value.StartsWith('\"') && value.EndsWith('\"'))
                 return $"{prefix}\"{Replacement}\"";
-            if (value.StartsWith("'") && value.EndsWith("'"))
+            if (value.StartsWith('\'') && value.EndsWith('\'')) 
                 return $"{prefix}'{Replacement}'";
             return $"{prefix}{Replacement}";
         });

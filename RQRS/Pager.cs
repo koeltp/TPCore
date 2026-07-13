@@ -3,12 +3,28 @@ using Taipi.Core.Exceptions;
 namespace Taipi.Core.RQRS;
 
 /// <summary>
+/// 排序方向枚举
+/// </summary>
+public enum SortDirection
+{
+    /// <summary>升序（ASC）</summary>
+    Ascending = 0,
+    /// <summary>降序（DESC）</summary>
+    Descending = 1
+}
+
+/// <summary>
 /// 分页请求参数基类，封装页码、每页大小及排序条件
 /// </summary>
 public class Pager
 {
     private int pageIndex;
     private int pageSize;
+
+    /// <summary>
+    /// 最大允许每页记录数，防止客户端请求过大 pageSize 导致数据库压力。默认 100
+    /// </summary>
+    public static int MaxPageSize { get; set; } = 100;
 
     /// <summary>
     /// 当前页码（从1开始），小于1时自动修正为1
@@ -20,12 +36,17 @@ public class Pager
     }
 
     /// <summary>
-    /// 每页记录数，小于等于0时自动修正为10
+    /// 每页记录数，小于等于0时修正为10，超过 MaxPageSize 时截断为 MaxPageSize
     /// </summary>
     public int PageSize
     {
-        get { return pageSize; }
-        set => pageSize = value <= 0 ? 10 : value;
+        get => pageSize;
+        set
+        {
+            if (value <= 0) pageSize = 10;
+            else if (value > MaxPageSize) pageSize = MaxPageSize;
+            else pageSize = value;
+        }
     }
 
     /// <summary>排序条件列表，可为空表示不排序</summary>
@@ -61,8 +82,10 @@ public class OrderByRQ
         }
     }
 
-    /// <summary>排序方式：0 表示升序（ASC），1 表示降序（DESC）。默认值为 0。</summary>
-    public int Type { get; set; }
+    /// <summary>
+    /// 排序方式，默认升序
+    /// </summary>
+    public SortDirection Type { get; set; } = SortDirection.Ascending;
 
     /// <summary>
     /// 校验字段名是否仅包含合法字符（字母、数字、下划线、点号、方括号）
@@ -94,7 +117,7 @@ public static class PagerEx
         items.ForEach(item =>
         {
             if (string.IsNullOrEmpty(item.Field)) return;
-            orderByStr += $"{item.Field} {(item.Type == 0 ? "ASC" : "DESC")},";
+            orderByStr += $"{item.Field} {(item.Type == SortDirection.Ascending ? "ASC" : "DESC")},";
         });
 
         return orderByStr.TrimEnd(',');

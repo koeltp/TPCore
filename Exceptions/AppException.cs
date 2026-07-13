@@ -13,24 +13,32 @@ namespace Taipi.Core.Exceptions;
 public class AppException : Exception
 {
     /// <summary>
-    /// 业务错误码，0=成功，非0=错误
+    /// 业务错误码，必须为非0值（0 表示成功，异常本身就是不成功）
     /// </summary>
     public int Code { get; }
 
     /// <summary>
     /// 创建业务异常（不含内部异常）
     /// </summary>
-    /// <param name="code">业务错误码，0=成功，非0=错误</param>
+    /// <param name="code">业务错误码，必须为非0值</param>
     /// <param name="message">面向用户的异常消息</param>
-    public AppException(int code, string message) : base(message) => Code = code;
+    public AppException(int code, string message) : base(message)
+    {
+        if (code <= 0) throw new ArgumentOutOfRangeException(nameof(code), code, "业务错误码必须为非0值");
+        Code = code;
+    }
 
     /// <summary>
     /// 创建业务异常（包含内部异常）
     /// </summary>
-    /// <param name="code">业务错误码，0=成功，非0=错误</param>
+    /// <param name="code">业务错误码，必须为非0值</param>
     /// <param name="message">面向用户的异常消息</param>
     /// <param name="innerException">内部异常</param>
-    public AppException(int code, string message, Exception innerException) : base(message, innerException) => Code = code;
+    public AppException(int code, string message, Exception innerException) : base(message, innerException)
+    {
+        if (code <= 0) throw new ArgumentOutOfRangeException(nameof(code), code, "业务错误码必须为非0值");
+        Code = code;
+    }
 }
 
 /// <summary>
@@ -76,7 +84,7 @@ public class ValidationException : AppException
 /// <para><b>使用示例：</b></para>
 /// <code>
 /// if (!user.HasRole(Role.Admin))
-///     throw new ForbiddenException(AppCodes.Forbidden, "仅管理员可执行此操作");
+///     throw new ForbiddenException(4001, "仅管理员可执行此操作");
 /// </code>
 /// </remarks>
 public class ForbiddenException : AppException

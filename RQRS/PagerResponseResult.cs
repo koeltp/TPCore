@@ -36,7 +36,7 @@ public class PagerResponseResult<T> : StatusResponseResult
     /// </summary>
     public static PagerResponseResult<T> Success(IEnumerable<T> items, int pageIndex, int pageSize, int totalCount)
     {
-        return new PagerResponseResult<T>(items, pageIndex, pageSize, totalCount);
+        return new PagerResponseResult<T>(items, pageIndex, pageSize, totalCount) { Message = "操作成功" };
     }
 
     /// <summary>
@@ -44,11 +44,12 @@ public class PagerResponseResult<T> : StatusResponseResult
     /// </summary>
     public static PagerResponseResult<T> Success(IEnumerable<T> items, Pager pager, int totalCount)
     {
-        return new PagerResponseResult<T>(items, pager, totalCount);
+        return new PagerResponseResult<T>(items, pager, totalCount) { Message = "操作成功" };
     }
 
     /// <summary>
-    /// 错误响应，业务错误码和消息由调用者指定
+    /// 错误响应，返回当前泛型类型的实例。
+    /// 使用 <see langword="new"/> 隐藏基类方法以返回具体子类型，调用者应始终使用具体类型调用
     /// </summary>
     public static new PagerResponseResult<T> Error(int code, string message)
     {

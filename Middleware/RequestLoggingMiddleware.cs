@@ -19,6 +19,19 @@ public class RequestLoggingMiddleware
     private readonly RequestLoggingOptions _options;
     private readonly RecyclableMemoryStreamManager _recyclableMemoryStreamManager;
 
+    /// <summary>
+    /// 预编译的查询参数脱敏正则缓存
+    /// </summary>
+    private readonly (Regex Regex, string Replacement)[] _queryStringSanitizers;
+
+    /// <summary>
+    /// 预编译的请求体脱敏正则缓存（每个字段两个正则：引号值和非引号值）
+    /// </summary>
+    private readonly (Regex Regex, string Replacement)[][] _bodySanitizers;
+
+    /// <summary>
+    /// 创建请求日志中间件实例
+    /// </summary>
     public RequestLoggingMiddleware(
         RequestDelegate next,
         ILogger<RequestLoggingMiddleware> logger,
@@ -28,8 +41,26 @@ public class RequestLoggingMiddleware
         _logger = logger;
         _options = options.Value;
         _recyclableMemoryStreamManager = new RecyclableMemoryStreamManager();
+
+        // 预编译脱敏正则，避免每次请求重复编译
+        _queryStringSanitizers = _options.SensitiveFields
+            .Select(f => (new Regex($@"([?&]){Regex.Escape(f)}=[^&]*", RegexOptions.Compiled | RegexOptions.IgnoreCase), $"$1{f}={_options.SensitiveReplacement}"))
+            .ToArray();
+
+        _bodySanitizers = _options.SensitiveFields
+            .Select(f => new[]
+            {
+                // JSON 双引号形式: "password":"123" 或 "password": "123"
+                (new Regex($@"(""{Regex.Escape(f)}""\s*:\s*)""[^""]*""", RegexOptions.Compiled | RegexOptions.IgnoreCase), $"$1\"{_options.SensitiveReplacement}\""),
+                // 值不带引号的情况（如 {"password":123}）
+                (new Regex($@"(""{Regex.Escape(f)}""\s*:\s*)[^,\s}}]+", RegexOptions.Compiled | RegexOptions.IgnoreCase), $"$1{_options.SensitiveReplacement}")
+            })
+            .ToArray();
     }
 
+    /// <summary>
+    /// 处理 HTTP 请求，记录请求日志
+    /// </summary>
     public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value;
@@ -139,27 +170,11 @@ public class RequestLoggingMiddleware
     }
 
     /// <summary>
-    /// 委托给 <see cref="IExceptionHandler{T}.GetLogLevel"/> 决定异常日志级别，与异常处理中间件保持一致
+    /// 委托给 <see cref="ExceptionHandlerDelegateCache"/> 获取异常日志级别，与异常处理中间件保持一致
     /// </summary>
     private static LogLevel GetExceptionLogLevel(Exception exception, IServiceProvider serviceProvider)
     {
-        var currentType = exception.GetType();
-        while (currentType != null && currentType != typeof(object))
-        {
-            var handlerType = typeof(IExceptionHandler<>).MakeGenericType(currentType);
-            var handler = serviceProvider.GetService(handlerType);
-            if (handler != null)
-            {
-                var getLogLevelMethod = handlerType.GetMethod(nameof(IExceptionHandler<Exception>.GetLogLevel));
-                if (getLogLevelMethod != null)
-                {
-                    return (LogLevel)getLogLevelMethod.Invoke(handler, [exception])!;
-                }
-            }
-            currentType = currentType.BaseType;
-        }
-        // 没有找到 Handler，回退到 Error
-        return LogLevel.Error;
+        return ExceptionHandlerDelegateCache.GetLogLevel(exception, serviceProvider);
     }
 
     private bool IsBusinessError(string responseBody, out string? errorCode, out string? errorMessage)
@@ -177,7 +192,7 @@ public class RequestLoggingMiddleware
             {
                 string code;
                 if (codeElement.ValueKind == JsonValueKind.Number)
-                    code = codeElement.GetRawText(); // 数字转字符串，如 0 -> "0"
+                    code = codeElement.GetRawText();
                 else if (codeElement.ValueKind == JsonValueKind.String)
                     code = codeElement.GetString() ?? "";
                 else
@@ -202,8 +217,6 @@ public class RequestLoggingMiddleware
     /// <summary>
     /// 判断是否应该跳过日志记录
     /// </summary>
-    /// <param name="path">请求路径</param>
-    /// <returns>是否应该跳过</returns>
     private bool ShouldSkip(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -233,8 +246,6 @@ public class RequestLoggingMiddleware
     /// <summary>
     /// 判断是否应该读取请求体
     /// </summary>
-    /// <param name="context">HTTP上下文</param>
-    /// <returns>是否应该读取请求体</returns>
     private static bool ShouldReadBody(HttpContext context)
     {
         var method = context.Request.Method;
@@ -253,7 +264,6 @@ public class RequestLoggingMiddleware
         return true;
     }
 
-
     private async Task<string> ReadRequestBodyAsync(HttpContext context)
     {
         try
@@ -266,12 +276,8 @@ public class RequestLoggingMiddleware
             var readLength = await reader.ReadAsync(buffer, 0, _options.MaxRequestBodyLength);
             var body = new string(buffer, 0, readLength);
 
-            // 判断是否还有更多内容，直接通过 ReadAsync 是否已读取全部判断
-            // 如果读取的长度等于缓冲区长度，可能存在更多数据，但为避免性能问题，不再深层检测，直接标记截断
             if (readLength == _options.MaxRequestBodyLength)
-            {
                 body += "...(truncated)";
-            }
 
             context.Request.Body.Position = 0;
             return string.IsNullOrWhiteSpace(body) ? "" : body;
@@ -282,37 +288,34 @@ public class RequestLoggingMiddleware
             return "";
         }
     }
+
+    /// <summary>
+    /// 使用预编译正则对查询参数中的敏感字段脱敏
+    /// </summary>
     private string SanitizeQueryString(string query)
     {
         if (string.IsNullOrEmpty(query))
             return query;
 
-        string result = query;
-        foreach (var field in _options.SensitiveFields)
-        {
-            var pattern = $@"([?&]){Regex.Escape(field)}=[^&]*";
-            var replacement = $"$1{field}={_options.SensitiveReplacement}";
-            result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
-        }
+        var result = query;
+        foreach (var (regex, replacement) in _queryStringSanitizers)
+            result = regex.Replace(result, replacement);
         return result;
     }
 
+    /// <summary>
+    /// 使用预编译正则对请求体中的敏感字段脱敏
+    /// </summary>
     private string SanitizeBody(string body)
     {
         if (string.IsNullOrEmpty(body))
             return body;
 
-        string result = body;
-        foreach (var field in _options.SensitiveFields)
+        var result = body;
+        foreach (var sanitizers in _bodySanitizers)
         {
-            // JSON 双引号形式: "password":"123" 或 "password": "123"
-            var pattern = $@"(""{Regex.Escape(field)}""\s*:\s*)""[^""]*""";
-            var replacement = $"$1\"{_options.SensitiveReplacement}\"";
-            result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
-            // 值不带引号的情况（如 {"password":123}）
-            pattern = $@"(""{Regex.Escape(field)}""\s*:\s*)[^,\s}}]+";
-            replacement = $"$1{_options.SensitiveReplacement}";
-            result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
+            foreach (var (regex, replacement) in sanitizers)
+                result = regex.Replace(result, replacement);
         }
         return result;
     }

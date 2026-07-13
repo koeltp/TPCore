@@ -12,7 +12,7 @@ namespace Taipi.Core.Exceptions;
 /// <list type="bullet">
 ///   <item><description>返回 HTTP 状态码 <b>200 OK</b></description></item>
 ///   <item><description>返回业务错误码 <see cref="AppException.Code"/> 和错误消息 <see cref="Exception.Message"/></description></item>
-///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法（直接透传异常消息）</description></item>
+///   <item><description>直接透传异常消息，不经过环境判断（业务异常消息始终面向用户）</description></item>
 /// </list>
 /// 
 /// <para><b>适用场景（典型业务拒绝）：</b></para>
@@ -58,7 +58,7 @@ namespace Taipi.Core.Exceptions;
 /// </remarks>
 public class AppExceptionHandler : ExceptionHandlerBase<AppException>
 {
-    public AppExceptionHandler(IWebHostEnvironment env, IOptions<ExceptionHandlingOptions> options) : base(env, options) { }
+    public AppExceptionHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
     /// <summary>
     /// 处理 AppException 异常
     /// </summary>

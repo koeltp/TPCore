@@ -12,8 +12,7 @@ namespace Taipi.Core.Exceptions;
 /// <para><b>处理策略：</b></para>
 /// <list type="bullet">
 ///   <item><description>返回 HTTP 状态码 <b>200 OK</b>（SPA 统一通过业务错误码判断结果）</description></item>
-///   <item><description>直接透传 Code 和 Message</description></item>
-///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法</description></item>
+///   <item><description>直接透传异常消息（校验消息始终面向用户，不经过环境判断）</description></item>
 /// </list>
 /// <para><b>原因：</b></para>
 /// <para>
@@ -24,7 +23,7 @@ namespace Taipi.Core.Exceptions;
 /// </remarks>
 public class ValidationHandler : ExceptionHandlerBase<ValidationException>
 {
-    public ValidationHandler(IWebHostEnvironment env, IOptions<ExceptionHandlingOptions> options) : base(env, options) { }
+    public ValidationHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
 
     /// <summary>
     /// 处理 ValidationException 异常

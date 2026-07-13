@@ -10,13 +10,12 @@ namespace Taipi.Core.Exceptions;
 /// <para><b>处理策略：</b></para>
 /// <list type="bullet">
 ///   <item><description>返回 HTTP 状态码 <b>200 OK</b>（SPA 统一通过业务错误码判断结果）</description></item>
-///   <item><description>直接透传 Code 和 Message</description></item>
-///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法</description></item>
+///   <item><description>直接透传异常消息（权限消息始终面向用户，不经过环境判断）</description></item>
 /// </list>
 /// </remarks>
 public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
 {
-    public ForbiddenHandler(IWebHostEnvironment env, IOptions<ExceptionHandlingOptions> options) : base(env, options) { }
+    public ForbiddenHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
     /// <summary>
     /// 处理 ForbiddenException 异常
     /// </summary>

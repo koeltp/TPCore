@@ -13,7 +13,7 @@ Taipi.Core/
 │   ├── PagerResponseResult.cs
 │   ├── SummaryPagerResponse.cs
 │   ├── SummaryPagerResponseResult.cs
-│   ├── Pager.cs
+│   ├── Pager.cs             # 含 SortDirection 枚举、OrderByRQ、PagerEx
 │   └── SearchPager.cs
 ├── Middleware/               # ASP.NET Core 中间件
 │   ├── ExceptionHandlingMiddleware.cs
@@ -23,8 +23,9 @@ Taipi.Core/
 ├── Exceptions/              # 异常类 + Handler 策略模式
 │   ├── Abstract/
 │   │   ├── IExceptionHandler.cs
-│   │   └── ExceptionHandlerBase.cs
-│   ├── AppCodes.cs               # 框架级错误码常量
+│   │   ├── ExceptionHandlerBase.cs
+│   │   └── ExceptionHandlerDelegateCache.cs  # 共享委托缓存
+│   ├── TaipiCoreErrorCodes.cs     # 框架级错误码常量
 │   ├── AppException.cs          # 业务异常基类 + ValidationException + ForbiddenException
 │   ├── ExceptionHandlingOptions.cs
 │   ├── AppExceptionHandler.cs
@@ -35,12 +36,12 @@ Taipi.Core/
 │   ├── ExceptionHandlingExtensions.cs
 │   ├── CorrelationIdExtensions.cs
 │   ├── RequestLoggingExtensions.cs
-│   ├── RateLimitingExtensions.cs
+│   ├── RateLimitingExtensions.cs  # 含 IPNetwork、RateLimitingOptions、RateLimitPolicies
 │   └── SerilogExtensions.cs
 ├── Logging/                 # 日志增强
 │   └── SensitiveDataEnricher.cs
 ├── Assertions/              # 断言扩展
-│   └── AsseterExtensions.cs
+│   └── AssertExtensions.cs
 └── Linq/                    # LINQ 扩展
     ├── IQueryableEx.cs
     └── IEnumerableEx.cs
@@ -59,27 +60,27 @@ var builder = WebApplication.CreateBuilder(args);
 SerilogExtensions.CreateBootstrapLogger();
 builder.Host.UseSerilogFromConfiguration();
 
-// 2. 全局异常处理（可自定义错误码和消息）
+// 2. 全局异常处理（可自定义错误码）
 builder.Services.AddTaiPiExceptionHandling(options =>
 {
-    options.UnauthorizedCode = 401;
-    options.UnauthorizedMessage = "登录已过期";
-    options.NotFoundCode = 404;
-    options.NotFoundMessage = "数据不存在";
+    options.InvalidSortFieldErrorCode = TaipiCoreErrorCodes.InvalidSortField;  // 默认 1
+    options.UnknownErrorCode = TaipiCoreErrorCodes.Unknown;                    // 默认 9999
 });
 
-// 3. 速率限制
+// 3. 速率限制（配置受信代理以正确获取客户端 IP）
 builder.Services.AddTaiPiRateLimiting(options =>
 {
     options.GlobalPermitLimit = 100;
     options.LoginPermitLimit = 5;
+    options.KnownProxies = [IPAddress.Parse("10.0.0.1"), IPAddress.Parse("10.0.0.2")];
+    options.KnownNetworks = [new IPNetwork(IPAddress.Parse("172.16.0.0"), 16)];
 });
 
 var app = builder.Build();
 
 // 中间件顺序很重要
 app.UseCorrelationId();              // 链路追踪（最先注册）
-app.UseRequestLogging();             // 请求日志（外层，能观察到异常处理后的正确状态码）
+app.UseTaiPiRequestLogging();        // 请求日志（外层，能观察到异常处理后的正确状态码）
 app.UseTaiPiExceptionHandling();     // 全局异常处理（内层，靠近端点，先捕获异常）
 app.UseRateLimiter();                // 速率限制
 
@@ -102,7 +103,7 @@ PagerResponse<T>                      (Items / TotalCount / PageSize / PageIndex
 └── SummaryPagerResponse<T1, T2>      (+ Summary)
 ```
 
-> **设计约定**：`Code = 0` 表示成功，非 0 为业务错误码；HTTP 状态码仅用于框架级错误（4xx/5xx）。
+> **设计约定**：`Code = 0` 表示成功，非 0 为业务错误码；所有业务异常统一返回 HTTP 200 + 业务错误码（SPA 友好）。
 
 ### StatusResponseResult
 
@@ -201,13 +202,14 @@ SummaryPagerResponseResult<Order, OrderSummary>.Success(
 
 ### Pager
 
-分页请求参数。
+分页请求参数，PageSize 有最大值限制（默认 100）。
 
 ```csharp
 public class Pager
 {
+    public static int MaxPageSize { get; set; } = 100;  // 最大每页记录数
     public int PageIndex { get; set; }   // >= 1，默认 1
-    public int PageSize { get; set; }    // > 0，默认 10
+    public int PageSize { get; set; }    // > 0，默认 10，最大 MaxPageSize
     public List<OrderByRQ>? OrderBy { get; set; }
 }
 ```
@@ -232,17 +234,27 @@ var request = new SearchPager<ClientFilter>
 };
 ```
 
+### SortDirection 枚举
+
+```csharp
+public enum SortDirection
+{
+    Ascending = 0,   // 升序（ASC）
+    Descending = 1   // 降序（DESC）
+}
+```
+
 ### OrderByRQ / PagerEx
 
 排序条件，`Field` 属性在赋值时进行白名单校验以防止 SQL 注入（仅允许字母、数字、下划线、点号、方括号）。
 
 ```csharp
-new OrderByRQ { Field = "CreateTime", Type = 1 }   // 降序
+new OrderByRQ { Field = "CreateTime", Type = SortDirection.Descending }   // 降序
 
 // 转换为 SQL ORDER BY 子句
 orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 
-// 非法字段名会在赋值时抛出 ValidationException（错误码 AppCodes.InvalidSortField，可通过 Options 覆盖）
+// 非法字段名会在赋值时抛出 ValidationException
 // new OrderByRQ { Field = "1; DROP TABLE Users" };  // 抛出异常
 ```
 
@@ -268,6 +280,7 @@ orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 |------|------|
 | 继承链回退 | `TimeoutException` → 无专属 Handler → 沿链找到 `IExceptionHandler<Exception>` → `UnknownExceptionHandler` |
 | 表达式树编译 | 首次遇到某异常类型后，Handle/GetLogLevel 方法编译为强类型委托，后续调用零反射开销 |
+| 共享委托缓存 | `ExceptionHandlerDelegateCache` 供两个中间件共用，消除反射开销 |
 | 日志级别委托 | 每个 Handler 自行决定 `GetLogLevel`，不再硬编码在中间件中 |
 
 **内置 Handler 映射：**
@@ -309,19 +322,16 @@ builder.Services.AddScoped<IExceptionHandler<PaymentFailedException>, PaymentFai
 ```csharp
 builder.Services.AddTaiPiExceptionHandling(options =>
 {
-    options.InvalidSortFieldErrorCode = AppCodes.InvalidSortField;  // 默认 1
-    options.ForbiddenErrorCode = AppCodes.Forbidden;     // 默认 3
-    options.UnknownErrorCode = AppCodes.Unknown;         // 默认 9999
-    options.UnknownErrorMessage = "服务器内部错误";
-    options.DetailedErrorMessageFactory = ex => ex.ToString();
-    options.EnableDebugHeaderInProduction = false;
-    options.LogException = true;
+    options.InvalidSortFieldErrorCode = TaipiCoreErrorCodes.InvalidSortField;  // 默认 1
+    options.UnknownErrorCode = TaipiCoreErrorCodes.Unknown;                    // 默认 9999
 });
 
 app.UseTaiPiExceptionHandling();
 ```
 
 **异常响应自动携带 `CorrelationId`**，便于前端与日志关联排查。所有异常响应自动设置 `Cache-Control: no-store` 防止错误内容被缓存。
+
+**未知异常**始终返回通用消息，详细异常仅记录在日志中（通过 CorrelationId 关联）。
 
 ---
 
@@ -342,6 +352,23 @@ public interface IExceptionHandler<T> where T : Exception
 ### ExceptionHandlerBase\<T\>
 
 抽象基类，提供 `GetFinalErrorMessage`（生产环境脱敏）和 `IsDevelopment`（调试模式判断），默认 `GetLogLevel` 返回 `Warning`。
+
+### TaipiCoreErrorCodes
+
+框架级错误码常量及映射方法。
+
+```csharp
+public static class TaipiCoreErrorCodes
+{
+    public const int InvalidSortField = 1;   // 排序字段名非法
+    public const int Unknown = 9999;         // 未知系统异常
+
+    // 将框架错误码映射到 Options 配置值，业务自定义错误码原样返回
+    public static int Mapper(int code, ExceptionHandlingOptions options);
+}
+```
+
+> **编码规则**：框架级错误码使用 1-999 范围，业务自定义错误码使用 1000+ 范围（4 位数：模块编号 + 错误编号）。
 
 ### AppException
 
@@ -403,9 +430,10 @@ POST /api/client → 500 (230ms)
 - 请求体超过 4KB 自动截断，避免日志膨胀
 - 自动跳过文件上传请求（`multipart/form-data`、`application/octet-stream`）
 - 异常请求的日志级别由 ExceptionHandler 决定（通过 HttpContext.Items 传递）
+- 敏感字段正则预编译（`RegexOptions.Compiled`），避免每次请求重复编译
 
 ```csharp
-app.UseRequestLogging();
+app.UseTaiPiRequestLogging();
 ```
 
 ### CorrelationId 中间件
@@ -414,6 +442,7 @@ app.UseRequestLogging();
 
 **特性：**
 - 优先读取请求头 `X-Correlation-Id`，不存在则自动生成
+- 请求头值校验格式（仅允许字母、数字、连字符，长度 <= 64），非法时生成新 ID
 - 响应头回写 `X-Correlation-Id`，便于前端追踪
 - 通过 Serilog `LogContext` 注入，后续所有日志自动携带
 
@@ -426,6 +455,10 @@ app.UseCorrelationId();
 ## 速率限制 (`Taipi.Core.Extensions`)
 
 基于 ASP.NET Core 内置的 `RateLimiter`，提供按 IP 的滑动窗口限流。
+
+**安全特性：**
+- 仅在请求来自受信代理（`KnownProxies` / `KnownNetworks`）时才读取 `X-Forwarded-For` 头
+- 默认不信任任何代理，直接使用 `RemoteIpAddress`，防止 IP 伪造绕过限流
 
 **内置策略：**
 
@@ -444,6 +477,10 @@ builder.Services.AddTaiPiRateLimiting(options =>
     options.GlobalWindowSeconds = 60;
     options.LoginPermitLimit = 5;
     options.LoginWindowSeconds = 60;
+
+    // 配置受信代理（仅来自这些 IP 的请求才读取 X-Forwarded-For）
+    options.KnownProxies = [IPAddress.Parse("10.0.0.1")];
+    options.KnownNetworks = [new IPNetwork(IPAddress.Parse("172.16.0.0"), 16)];
 });
 
 // 注册中间件
@@ -463,12 +500,12 @@ app.MapPost("/api/login", Login).RequireRateLimiting(RateLimitPolicies.LoginEndp
 // 1. 引导日志（Program.cs 最顶部，捕获 Host 构建前的启动错误）
 SerilogExtensions.CreateBootstrapLogger();
 
-// 2. 配置 Host 使用 Serilog（从 appsettings.json 读取）
+// 2. 配置 Host 使用 Serilog（从 appsettings.json 读取，已集成全局脱敏）
 builder.Host.UseSerilogFromConfiguration();
 
 // 3. 注册日志中间件
 app.UseCorrelationId();      // 链路追踪（最先注册）
-app.UseRequestLogging();     // 请求日志（外层）
+app.UseTaiPiRequestLogging();     // 请求日志（外层）
 // app.UseTaiPiExceptionHandling(); // 异常处理应注册在请求日志之后（内层，靠近端点）
 ```
 
@@ -506,7 +543,7 @@ app.UseRequestLogging();     // 请求日志（外层）
 
 | 方法 | 说明 |
 |------|------|
-| `Page(pageIndex, pageSize)` | 数据库分页查询 |
+| `Page(pageIndex, pageSize)` | 数据库分页查询（边界自动修正：pageIndex < 1 → 1，pageSize <= 0 → 10） |
 | `Page(Pager)` | 按 Pager 对象分页查询 |
 | `WhereIf(condition, predicate)` | 条件过滤 |
 | `OrderByIf(condition, keySelector)` | 条件排序 |
@@ -523,18 +560,18 @@ var query = dbContext.Clients
 
 | 方法 | 说明 |
 |------|------|
-| `Page(pageIndex, pageSize)` | 内存分页 |
+| `Page(pageIndex, pageSize)` | 内存分页（边界自动修正） |
 | `Page(Pager)` | 按 Pager 对象内存分页 |
 | `WhereIf(condition, predicate)` | 条件过滤 |
 | `ParallelForEachAsync(func)` | 并行异步遍历 |
-| `ParallelForEachAsync(func, dop)` | 指定并发的并行异步遍历 |
+| `ParallelForEachAsync(func, maxConcurrency)` | 指定最大并发数的并行异步遍历 |
 
 ---
 
 ## NuGet
 
 ```xml
-<PackageReference Include="Taipi.Core" Version="1.3.10" />
+<PackageReference Include="Taipi.Core" Version="1.3.15" />
 ```
 
 ### 本地打包
@@ -543,7 +580,7 @@ var query = dbContext.Clients
 dotnet pack -c Release -o ./nupkg
 ```
 
-生成到 `./nupkg/Taipi.Core.1.3.10.nupkg`，其他项目通过本地源引用：
+生成到 `./nupkg/Taipi.Core.1.3.15.nupkg`，其他项目通过本地源引用：
 
 ```bash
 dotnet add <项目> package Taipi.Core -s ./Taipi.Core/nupkg
@@ -552,7 +589,7 @@ dotnet add <项目> package Taipi.Core -s ./Taipi.Core/nupkg
 ### 推送到 NuGet 服务器
 
 ```bash
-dotnet nuget push ./nupkg/Taipi.Core.1.3.10.nupkg --api-key <你的API密钥> --source https://api.nuget.org/v3/index.json
+dotnet nuget push ./nupkg/Taipi.Core.1.3.15.nupkg --api-key <你的API密钥> --source https://api.nuget.org/v3/index.json
 ```
 
 发布新版本时先改 `Taipi.Core.csproj` 里的 `<Version>`，再重新打包推送。
