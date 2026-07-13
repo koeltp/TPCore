@@ -6,14 +6,14 @@ namespace Taipi.Core.Exceptions;
 public class ExceptionHandlingOptions
 {
     /// <summary>
-    /// 排序字段名非法的错误码，默认 <see cref="AppCodes.InvalidSortField"/>
+    /// 排序字段名非法的错误码，默认 <see cref="TaipiCoreErrorCodes.InvalidSortField"/>
     /// </summary>
-    public int InvalidSortFieldErrorCode { get; set; } = AppCodes.InvalidSortField;
+    public int InvalidSortFieldErrorCode { get; set; } = TaipiCoreErrorCodes.InvalidSortField;
 
     /// <summary>
-    /// 未知异常的错误码，默认 <see cref="AppCodes.Unknown"/>
+    /// 未知异常的错误码，默认 <see cref="TaipiCoreErrorCodes.Unknown"/>
     /// </summary>
-    public int UnknownErrorCode { get; set; } = AppCodes.Unknown;
+    public int UnknownErrorCode { get; set; } = TaipiCoreErrorCodes.Unknown;
 
     /// <summary>
     /// 生产环境下的未知异常提示消息

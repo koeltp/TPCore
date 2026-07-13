@@ -56,7 +56,7 @@ public class OrderByRQ
             }
             // 白名单校验：仅允许合法的数据库标识符字符，拦截 SQL 注入
             if (!IsValidFieldName(value))
-                throw new ValidationException(AppCodes.InvalidSortField, $"非法排序字段名: {value}");
+                throw new ValidationException(TaipiCoreErrorCodes.InvalidSortField, $"非法排序字段名: {value}");
             _field = value.Trim();
         }
     }

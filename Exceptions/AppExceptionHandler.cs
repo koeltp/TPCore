@@ -27,12 +27,8 @@ namespace Taipi.Core.Exceptions;
 /// <para><b>与 <see cref="ValidationException"/> 的区别：</b></para>
 /// <para>
 ///   <see cref="ValidationException"/> 表示"请求参数格式/值不正确"（如邮箱格式错误、必填字段为空），
-///   属于 HTTP 400（客户端请求错误）。而 <see cref="AppException"/> 表示"请求参数没问题，
-///   但业务规则不允许执行"，属于 HTTP 200（请求成功处理，但业务被拒绝）。
-/// </para>
-/// <para>
-///   从 HTTP 语义角度：<see cref="ValidationException"/> 意味着"客户端发来的东西是错的"；
-///   <see cref="AppException"/> 意味着"服务器理解了请求，但业务规则说不让做"。
+///   而 <see cref="AppException"/> 表示"请求参数没问题，但业务规则不允许执行"。
+///   两者均返回 HTTP 200 + 业务错误码，SPA 统一通过错误码判断结果。
 /// </para>
 /// 
 /// <para><b>⚠️ 重要约定：</b></para>
@@ -71,7 +67,7 @@ public class AppExceptionHandler : ExceptionHandlerBase<AppException>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(AppException exception, HttpContext context)
     {
-        var code = AppCodes.Mapper(exception.Code, _options);
+        var code = TaipiCoreErrorCodes.Mapper(exception.Code, _options);
         return (StatusCodes.Status200OK, StatusResponseResult.Error(code, exception.Message));
     }
 

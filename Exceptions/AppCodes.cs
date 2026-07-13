@@ -7,7 +7,7 @@ namespace Taipi.Core.Exceptions;
 /// <see cref="ExceptionHandlingOptions"/> 中配置的实际值。业务自定义错误码直接透传。</para>
 /// <para><b>新增常量时必须同步修改：</b>1) AppCodes 常量 2) ExceptionHandlingOptions 属性 3) Mapper switch 分支</para>
 /// </summary>
-public static class AppCodes
+public static class TaipiCoreErrorCodes
 {
     /// <summary>
     /// 排序字段名非法（含 SQL 注入字符等）

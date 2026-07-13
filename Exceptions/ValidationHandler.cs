@@ -11,7 +11,7 @@ namespace Taipi.Core.Exceptions;
 /// <remarks>
 /// <para><b>处理策略：</b></para>
 /// <list type="bullet">
-///   <item><description>返回 HTTP 状态码 400 Bad Request</description></item>
+///   <item><description>返回 HTTP 状态码 <b>200 OK</b>（SPA 统一通过业务错误码判断结果）</description></item>
 ///   <item><description>直接透传 Code 和 Message</description></item>
 ///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法</description></item>
 /// </list>
@@ -34,8 +34,8 @@ public class ValidationHandler : ExceptionHandlerBase<ValidationException>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(ValidationException exception, HttpContext context)
     {
-        var code = AppCodes.Mapper(exception.Code, _options);
-        return (StatusCodes.Status400BadRequest, StatusResponseResult.Error(code, exception.Message));
+        var code = TaipiCoreErrorCodes.Mapper(exception.Code, _options);
+        return (StatusCodes.Status200OK, StatusResponseResult.Error(code, exception.Message));
     }
 
     /// <summary>

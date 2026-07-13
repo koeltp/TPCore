@@ -6,7 +6,7 @@ namespace Taipi.Core.Exceptions;
 /// <remarks>
 /// <para><b>错误码约定：</b></para>
 /// <list type="bullet">
-///   <item><description>框架级错误码：1-999 范围，定义在 <see cref="AppCodes"/></description></item>
+///   <item><description>框架级错误码：1-999 范围，定义在 <see cref="TaipiCoreErrorCodes"/></description></item>
 ///   <item><description>业务自定义错误码：1000+ 范围（4 位数，模块编号 + 错误编号）</description></item>
 /// </list>
 /// </remarks>
@@ -34,7 +34,7 @@ public class AppException : Exception
 }
 
 /// <summary>
-/// 表示输入校验失败异常（HTTP 400）。
+/// 表示输入校验失败异常（HTTP 200 + 业务错误码）。
 /// </summary>
 /// <remarks>
 /// <para><b>适用场景：</b></para>
@@ -63,7 +63,7 @@ public class ValidationException : AppException
 }
 
 /// <summary>
-/// 表示禁止访问异常（HTTP 403）。
+/// 表示禁止访问异常（HTTP 200 + 业务错误码）。
 /// </summary>
 /// <remarks>
 /// <para><b>适用场景：</b></para>
@@ -72,7 +72,7 @@ public class ValidationException : AppException
 ///   <item><description>资源所有权校验失败（如修改他人订单）</description></item>
 ///   <item><description>功能未授权（如免费用户访问付费功能）</description></item>
 /// </list>
-/// <para><b>与 HTTP 401 的区别：</b>401 表示未认证（Token 缺失/过期），403 表示已认证但无权访问。</para>
+/// <para><b>与未认证的区别：</b>未认证表示 Token 缺失/过期（由认证中间件处理），本异常表示已认证但无权访问。</para>
 /// <para><b>使用示例：</b></para>
 /// <code>
 /// if (!user.HasRole(Role.Admin))

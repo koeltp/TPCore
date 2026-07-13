@@ -34,7 +34,7 @@ public class UnknownExceptionHandler : ExceptionHandlerBase<Exception>
     public override (int StatusCode, StatusResponseResult Result) Handle(Exception exception, HttpContext context)
     {
         var message = GetFinalErrorMessage(exception, context, _options.UnknownErrorMessage);
-        var code = AppCodes.Mapper(AppCodes.Unknown, _options);
+        var code = TaipiCoreErrorCodes.Mapper(TaipiCoreErrorCodes.Unknown, _options);
         return (StatusCodes.Status500InternalServerError, StatusResponseResult.Error(code, message));
     }
 

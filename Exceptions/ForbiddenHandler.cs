@@ -4,8 +4,16 @@ using Microsoft.Extensions.Options;
 
 namespace Taipi.Core.Exceptions;
 /// <summary>
-/// 403 错误异常处理程序，用于处理访问被拒绝的情况
+/// 处理 <see cref="ForbiddenException"/> 禁止访问异常。
 /// </summary>
+/// <remarks>
+/// <para><b>处理策略：</b></para>
+/// <list type="bullet">
+///   <item><description>返回 HTTP 状态码 <b>200 OK</b>（SPA 统一通过业务错误码判断结果）</description></item>
+///   <item><description>直接透传 Code 和 Message</description></item>
+///   <item><description><b>不</b>使用 <see cref="ExceptionHandlerBase{T}.GetFinalErrorMessage"/> 方法</description></item>
+/// </list>
+/// </remarks>
 public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
 {
     public ForbiddenHandler(IWebHostEnvironment env, IOptions<ExceptionHandlingOptions> options) : base(env, options) { }
@@ -17,8 +25,8 @@ public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
     /// <returns>包含状态码和状态响应结果的元组</returns>
     public override (int StatusCode, StatusResponseResult Result) Handle(ForbiddenException exception, HttpContext context)
     {
-        var code = AppCodes.Mapper(exception.Code, _options);
-        return (StatusCodes.Status403Forbidden, StatusResponseResult.Error(code, exception.Message));
+        var code = TaipiCoreErrorCodes.Mapper(exception.Code, _options);
+        return (StatusCodes.Status200OK, StatusResponseResult.Error(code, exception.Message));
     }
 
     /// <summary>

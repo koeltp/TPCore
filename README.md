@@ -275,8 +275,8 @@ orderByList.ToSql();  // "CreateTime DESC,Name ASC"
 | 异常类型 | Handler | HTTP 状态码 | 日志级别 | 说明 |
 |----------|---------|------------|---------|------|
 | `AppException` | `AppExceptionHandler` | 200 | Warning | 业务拒绝，前端判断 code |
-| `ValidationException` | `ValidationHandler` | 400 | Warning | 输入校验失败 |
-| `ForbiddenException` | `ForbiddenHandler` | 403 | Information | 无权访问 |
+| `ValidationException` | `ValidationHandler` | 200 | Information | 输入校验失败 |
+| `ForbiddenException` | `ForbiddenHandler` | 200 | Information | 无权访问 |
 | 其他 | `UnknownExceptionHandler` | 500 | Error | 系统异常，生产环境隐藏详情 |
 
 #### 自定义 Handler
@@ -363,7 +363,7 @@ public async Task<ClientDto> CreateAsync(ClientRQ request)
 
 ### ValidationException / ForbiddenException
 
-预定义的业务异常子类，分别对应 HTTP 400 和 403。
+预定义的业务异常子类，统一返回 HTTP 200 + 业务错误码（SPA 友好）。
 
 ```csharp
 throw new ValidationException(3001, "邮箱格式不正确");
@@ -402,7 +402,7 @@ POST /api/client → 500 (230ms)
 - 自动过滤 `/health`、`/swagger` 和静态文件请求
 - 请求体超过 4KB 自动截断，避免日志膨胀
 - 自动跳过文件上传请求（`multipart/form-data`、`application/octet-stream`）
-- 状态码 >= 500 为 Error，>= 400 为 Warning，其余为 Information
+- 异常请求的日志级别由 ExceptionHandler 决定（通过 HttpContext.Items 传递）
 
 ```csharp
 app.UseRequestLogging();
