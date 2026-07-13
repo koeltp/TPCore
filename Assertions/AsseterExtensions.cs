@@ -17,7 +17,18 @@ namespace Taipi.Core.Assertions
                 throw new AppException(errorCode, errorMsg);
             }
         }
-
+        /// <summary>
+        /// 值为 false 时抛出 AppException，为 true 时安全通过
+        /// </summary>
+        /// <param name="r">布尔值</param>
+        /// <param name="exception">异常</param>
+        public static void ThrowIfFalse(this bool r, AppException exception)
+        {
+            if (!r)
+            {
+                throw exception;
+            }
+        }
         /// <summary>
         /// 值为 true 时抛出 AppException，为 false 时安全通过
         /// </summary>
@@ -29,6 +40,18 @@ namespace Taipi.Core.Assertions
             if (r)
             {
                 throw new AppException(errorCode, errorMsg);
+            }
+        }
+        /// <summary>
+        /// 值为 true 时抛出 AppException，为 false 时安全通过
+        /// </summary>
+        /// <param name="r">布尔值</param>
+        /// <param name="exception">异常</param>
+        public static void ThrowIfTrue(this bool r, AppException exception)
+        {
+            if (r)
+            {
+                throw exception;
             }
         }
 
