@@ -11,7 +11,7 @@ public class PagerResponse<T>
     private int _pageIndex = 1;
 
     /// <summary>当前页的数据列表</summary>
-    public IEnumerable<T> Items { get; set; } = [];
+    public IEnumerable<T> Items { get; init; } = [];
 
     /// <summary>
     /// 总记录数，负值自动修正为0
@@ -44,4 +44,14 @@ public class PagerResponse<T>
     /// 总页数，根据 TotalCount 和 PageSize 自动计算
     /// </summary>
     public int PageCount => TotalCount > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
+
+    /// <summary>
+    /// 是否有上一页（当前页码 &gt; 1）
+    /// </summary>
+    public bool HasPreviousPage => PageIndex > 1;
+
+    /// <summary>
+    /// 是否有下一页（当前页码 &lt; 总页数）
+    /// </summary>
+    public bool HasNextPage => PageIndex < PageCount;
 }

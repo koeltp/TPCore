@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Taipi.Core.RQRS;
 
 namespace Taipi.Core.Linq;
@@ -50,15 +49,17 @@ public static class IEnumerableEx
     }
 
     /// <summary>
-    /// 并行执行 ForEach 操作，适用于需要对集合中的每个元素执行异步操作的场景
+    /// 并行执行 ForEach 操作，基于 .NET 原生 Parallel.ForEachAsync 实现，
+    /// 支持取消令牌和自动并发控制
     /// </summary>
     /// <typeparam name="T">数据类型</typeparam>
     /// <param name="source">数据源</param>
     /// <param name="func">对每个元素执行的异步操作</param>
+    /// <param name="cancellationToken">取消令牌</param>
     /// <returns>所有任务完成后的 Task</returns>
-    public static Task ParallelForEachAsync<T>(this IEnumerable<T> source, Func<T, Task> func)
+    public static Task ParallelForEachAsync<T>(this IEnumerable<T> source, Func<T, Task> func, CancellationToken cancellationToken = default)
     {
-        return Task.WhenAll(source.Select(arg => Task.Run(() => func(arg))));
+        return Parallel.ForEachAsync(source, cancellationToken, async (item, ct) => await func(item));
     }
 
     /// <summary>
@@ -68,20 +69,15 @@ public static class IEnumerableEx
     /// <param name="source">数据源</param>
     /// <param name="func">对每个元素执行的异步操作</param>
     /// <param name="maxConcurrency">最大并发数</param>
+    /// <param name="cancellationToken">取消令牌</param>
     /// <returns>所有任务完成后的 Task</returns>
-    public static Task ParallelForEachAsync<T>(this IEnumerable<T> source, Func<T, Task> func, int maxConcurrency)
+    public static Task ParallelForEachAsync<T>(this IEnumerable<T> source, Func<T, Task> func, int maxConcurrency, CancellationToken cancellationToken = default)
     {
-        return Task.WhenAll(
-            Partitioner.Create(source).GetPartitions(maxConcurrency)
-            .Select(partition => Task.Run(async () =>
-            {
-                using (partition)
-                {
-                    while (partition.MoveNext())
-                    {
-                        await func(partition.Current);
-                    }
-                }
-            })));
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = maxConcurrency,
+            CancellationToken = cancellationToken
+        };
+        return Parallel.ForEachAsync(source, options, async (item, ct) => await func(item));
     }
 }

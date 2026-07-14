@@ -21,9 +21,9 @@ namespace Taipi.Core.Exceptions;
 ///   不需要在生产环境进行脱敏或隐藏。
 /// </para>
 /// </remarks>
-public class ValidationHandler : ExceptionHandlerBase<ValidationException>
+public class ValidationExceptionHandler : ExceptionHandlerBase<ValidationException>
 {
-    public ValidationHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
+    public ValidationExceptionHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
 
     /// <summary>
     /// 处理 ValidationException 异常

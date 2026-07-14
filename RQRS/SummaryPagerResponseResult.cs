@@ -14,7 +14,7 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     public SummaryPagerResponseResult() { }
 
     /// <summary>
-    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 0（成功）
+    /// 通过分页数据和汇总信息构造响应结果，Code 默认为 0（成功），Message 默认为"操作成功"
     /// </summary>
     /// <param name="items">当前页的数据列表</param>
     /// <param name="summary">汇总数据（如合计值、统计信息等）</param>
@@ -23,6 +23,7 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     /// <param name="totalCount">总记录数</param>
     public SummaryPagerResponseResult(IEnumerable<T1> items, T2 summary, int pageIndex, int pageSize, int totalCount)
     {
+        Message = "操作成功";
         Data = new SummaryPagerResponse<T1, T2>
         {
             Items = items,
@@ -67,10 +68,13 @@ public class SummaryPagerResponseResult<T1, T2> : StatusResponseResult
     }
     /// <summary>
     /// 错误响应，返回当前泛型类型的实例。
-    /// 使用 <see langword="new"/> 隐藏基类方法以返回具体子类型，调用者应始终使用具体类型调用
+    /// 使用 <see langword="new"/> 隐藏基类方法以返回具体子类型，调用者应始终使用具体类型调用。
+    /// 错误码必须为非0值（0 表示成功，与错误语义矛盾）
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">code 为 0 时抛出</exception>
     public static new SummaryPagerResponseResult<T1, T2> Error(int code, string message)
     {
+        if (code == 0) throw new ArgumentOutOfRangeException(nameof(code), "错误码不能为 0（0 表示成功）");
         return new SummaryPagerResponseResult<T1, T2> { Code = code, Message = message };
-    }    
+    }
 }

@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 
 using Taipi.Core.RQRS;
 
@@ -61,5 +61,29 @@ public static class IQueryableEx
     public static IQueryable<T> OrderByIf<T, TKey>(this IQueryable<T> source, bool condition, Expression<Func<T, TKey>> keySelector)
     {
         return condition ? source.OrderBy(keySelector) : source;
+    }
+
+    /// <summary>
+    /// 根据条件降序排序
+    /// </summary>
+    public static IQueryable<T> OrderByDescendingIf<T, TKey>(this IQueryable<T> source, bool condition, Expression<Func<T, TKey>> keySelector)
+    {
+        return condition ? source.OrderByDescending(keySelector) : source;
+    }
+
+    /// <summary>
+    /// 根据条件追加升序排序（需在 OrderBy 之后使用）
+    /// </summary>
+    public static IQueryable<T> ThenByIf<T, TKey>(this IQueryable<T> source, bool condition, Expression<Func<T, TKey>> keySelector)
+    {
+        return condition ? ((IOrderedQueryable<T>)source).ThenBy(keySelector) : source;
+    }
+
+    /// <summary>
+    /// 根据条件追加降序排序（需在 OrderBy 之后使用）
+    /// </summary>
+    public static IQueryable<T> ThenByDescendingIf<T, TKey>(this IQueryable<T> source, bool condition, Expression<Func<T, TKey>> keySelector)
+    {
+        return condition ? ((IOrderedQueryable<T>)source).ThenByDescending(keySelector) : source;
     }
 }

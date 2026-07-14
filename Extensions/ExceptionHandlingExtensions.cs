@@ -24,8 +24,9 @@ public static class ExceptionHandlingExtensions
 
         // 注册顺序不影响 Handler 匹配（中间件通过继承链回退），按从具体到一般排列仅为了可读性
         services.AddScoped<IExceptionHandler<AppException>, AppExceptionHandler>();
-        services.AddScoped<IExceptionHandler<ValidationException>, ValidationHandler>();
-        services.AddScoped<IExceptionHandler<ForbiddenException>, ForbiddenHandler>();
+        services.AddScoped<IExceptionHandler<ValidationException>, ValidationExceptionHandler>();
+        services.AddScoped<IExceptionHandler<ForbiddenException>, ForbiddenExceptionHandler>();
+        services.AddScoped<IExceptionHandler<OperationCanceledException>, OperationCanceledHandler>();
         services.AddScoped<IExceptionHandler<Exception>, UnknownExceptionHandler>();
         return services;
     }

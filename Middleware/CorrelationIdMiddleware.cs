@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Serilog.Context;
 
 namespace Taipi.Core.Middleware;
@@ -9,13 +10,15 @@ namespace Taipi.Core.Middleware;
 public class CorrelationIdMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly CorrelationIdOptions _options;
 
     /// <summary>
     /// 创建 CorrelationId 中间件实例
     /// </summary>
-    public CorrelationIdMiddleware(RequestDelegate next)
+    public CorrelationIdMiddleware(RequestDelegate next, IOptions<CorrelationIdOptions> options)
     {
         _next = next;
+        _options = options.Value;
     }
 
     /// <summary>
@@ -26,7 +29,9 @@ public class CorrelationIdMiddleware
         var correlationId = GetOrGenerateCorrelationId(context);
 
         context.Items["CorrelationId"] = correlationId;
-        context.Response.Headers.Append("X-Correlation-Id", correlationId);
+
+        if (_options.IncludeInResponse)
+            context.Response.Headers.Append(_options.HeaderName, correlationId);
 
         using (LogContext.PushProperty("CorrelationId", correlationId))
         {
@@ -37,20 +42,22 @@ public class CorrelationIdMiddleware
     /// <summary>
     /// 从请求头获取 CorrelationId（校验格式），不存在或格式非法时生成新 ID
     /// </summary>
-    private static string GetOrGenerateCorrelationId(HttpContext context)
+    private string GetOrGenerateCorrelationId(HttpContext context)
     {
-        var headerValue = context.Request.Headers["X-Correlation-Id"].FirstOrDefault();
+        var headerValue = context.Request.Headers[_options.HeaderName].FirstOrDefault();
         if (!string.IsNullOrEmpty(headerValue) && IsValidCorrelationId(headerValue))
             return headerValue;
 
-        return Guid.NewGuid().ToString("N")[..16];
+        // 根据配置截取 Guid 前N位作为 CorrelationId
+        var idLength = Math.Clamp(_options.GenerateIdLength, 8, 32);
+        return Guid.NewGuid().ToString("N")[..idLength];
     }
 
     /// <summary>
-    /// 校验 CorrelationId 格式：仅允许字母、数字和连字符，长度 1-64，防止注入非法字符
+    /// 校验 CorrelationId 格式：仅允许字母、数字和连字符，长度不超过 MaxIdLength，防止注入非法字符
     /// </summary>
-    private static bool IsValidCorrelationId(string value)
+    private bool IsValidCorrelationId(string value)
     {
-        return value.Length <= 64 && value.All(c => char.IsLetterOrDigit(c) || c == '-');
+        return value.Length <= _options.MaxIdLength && value.All(c => char.IsLetterOrDigit(c) || c == '-');
     }
 }

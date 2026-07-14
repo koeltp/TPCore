@@ -8,5 +8,5 @@ namespace Taipi.Core.RQRS;
 public class SummaryPagerResponse<T1, T2> : PagerResponse<T1>
 {
     /// <summary>汇总数据（如合计值、统计信息等）</summary>
-    public T2? Summary { get; set; }
+    public T2? Summary { get; init; }
 }

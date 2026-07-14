@@ -28,7 +28,8 @@ public class SensitiveDataEnricher : ILogEventEnricher
     {
         // 构建一个正则：匹配 (敏感字段名=值) 或 ("敏感字段名":"值") 等形式
         // 支持: key=value, key="value", key:'value', key:value (JSON无引号)
-        var pattern = $@"(?<prefix>(?i)(?:{string.Join("|", SensitiveKeys)})\s*[:=]\s*)(?<value>['""]?[^'""\s,}}]+)";
+        // [^'""\s,}] 匹配非引号、非空白、非逗号、非右大括号的字符，防止值捕获越界
+        var pattern = $@"(?<prefix>(?:{string.Join("|", SensitiveKeys.Select(Regex.Escape))})\s*[:=]\s*)(?<value>['""]?[^'""\s,}}]+)";
         ValueReplacementRegex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
     }
 

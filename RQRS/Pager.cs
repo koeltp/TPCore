@@ -22,7 +22,9 @@ public class Pager
     private int pageSize;
 
     /// <summary>
-    /// 最大允许每页记录数，防止客户端请求过大 pageSize 导致数据库压力。默认 100
+    /// 最大允许每页记录数，防止客户端请求过大 pageSize 导致数据库压力。默认 100。
+    /// 仅应在应用启动时设置，运行期间不可修改以避免并发安全问题。
+    /// C# 不支持 static init-only 属性，因此通过文档约定约束
     /// </summary>
     public static int MaxPageSize { get; set; } = 100;
 
@@ -103,7 +105,8 @@ public class OrderByRQ
 public static class PagerEx
 {
     /// <summary>
-    /// 将排序条件列表转换为 SQL ORDER BY 子句字符串
+    /// 将排序条件列表转换为 SQL ORDER BY 子句字符串。
+    /// Field 在 setter 中已做白名单校验，此处二次校验作为防御纵深
     /// </summary>
     /// <param name="items">排序条件列表</param>
     /// <returns>SQL ORDER BY 子句，无排序条件时返回空字符串</returns>
@@ -112,14 +115,24 @@ public static class PagerEx
         if (items == null || items.Count == 0)
             return string.Empty;
 
-        // Field 已在 setter 中完成白名单校验，此处无需重复校验
-        var orderByStr = string.Empty;
-        items.ForEach(item =>
+        // 防御纵深：二次校验 Field 白名单，防止通过反射/序列化绕过 setter 校验
+        var parts = new List<string>();
+        foreach (var item in items)
         {
-            if (string.IsNullOrEmpty(item.Field)) return;
-            orderByStr += $"{item.Field} {(item.Type == SortDirection.Ascending ? "ASC" : "DESC")},";
-        });
+            if (string.IsNullOrEmpty(item.Field)) continue;
+            if (!IsValidFieldName(item.Field))
+                throw new ValidationException(TaipiCoreErrorCodes.InvalidSortField, $"非法排序字段名: {item.Field}");
+            parts.Add($"{item.Field} {(item.Type == SortDirection.Ascending ? "ASC" : "DESC")}");
+        }
 
-        return orderByStr.TrimEnd(',');
+        return string.Join(",", parts);
+    }
+
+    /// <summary>
+    /// 校验字段名是否仅包含合法字符（与 OrderByRQ 内部校验逻辑一致）
+    /// </summary>
+    private static bool IsValidFieldName(string field)
+    {
+        return field.Trim().All(c => char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '[' || c == ']');
     }
 }

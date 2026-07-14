@@ -101,11 +101,16 @@ public static class RateLimitingExtensions
 
     /// <summary>
     /// 获取客户端真实 IP。仅在请求来自受信代理时才读取 X-Forwarded-For，
-    /// 防止攻击者伪造该头绕过 IP 限流
+    /// 防止攻击者伪造该头绕过 IP 限流。
+    /// 自动处理 IPv4-mapped IPv6 地址（::ffff:x.x.x.x → x.x.x.x）
     /// </summary>
     private static string GetClientIp(HttpContext context, RateLimitingOptions options)
     {
         var remoteIp = context.Connection.RemoteIpAddress;
+
+        // 将 IPv4-mapped IPv6 地址映射回 IPv4，确保双栈环境下代理识别正确
+        if (remoteIp != null && remoteIp.IsIPv4MappedToIPv6)
+            remoteIp = remoteIp.MapToIPv4();
 
         // 仅当 RemoteIpAddress 属于受信代理时，才信任 X-Forwarded-For
         if (remoteIp != null && (options.KnownProxies.Count > 0 || options.KnownNetworks.Count > 0))
@@ -227,10 +232,15 @@ public class IPNetwork
     }
 
     /// <summary>
-    /// 判断指定 IP 是否属于本网络段
+    /// 判断指定 IP 是否属于本网络段。
+    /// 支持 IPv4-mapped IPv6 地址（::ffff:x.x.x.x）自动映射到 IPv4 比较
     /// </summary>
     public bool Contains(IPAddress ip)
     {
+        // 将 IPv4-mapped IPv6 地址映射回 IPv4，确保双栈环境下匹配正确
+        if (ip.IsIPv4MappedToIPv6)
+            ip = ip.MapToIPv4();
+
         var ipBytes = ip.GetAddressBytes();
         if (ipBytes.Length != _networkBytes.Length) return false;
 

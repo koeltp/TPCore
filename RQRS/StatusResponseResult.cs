@@ -6,10 +6,10 @@ namespace Taipi.Core.RQRS;
 public class StatusResponseResult
 {
     /// <summary>业务状态码，0=成功，非0=业务错误码（4位：模块+编号）</summary>
-    public int Code { get; set; } = 0;
+    public int Code { get; init; } = 0;
 
     /// <summary>响应消息描述</summary>
-    public string Message { get; set; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
 
     /// <summary>
     /// 请求追踪标识，用于关联日志链路。
@@ -35,10 +35,13 @@ public class StatusResponseResult
     }
 
     /// <summary>
-    /// 错误响应，业务错误码和消息由调用者指定
+    /// 错误响应，业务错误码和消息由调用者指定。
+    /// 错误码必须为非0值（0 表示成功，与错误语义矛盾）
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">code 为 0 时抛出</exception>
     public static StatusResponseResult Error(int code, string message)
     {
+        if (code == 0) throw new ArgumentOutOfRangeException(nameof(code), "错误码不能为 0（0 表示成功）");
         return new StatusResponseResult { Code = code, Message = message };
     }
 }

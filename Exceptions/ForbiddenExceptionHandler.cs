@@ -3,6 +3,7 @@ using Taipi.Core.Exceptions.Abstract;
 using Microsoft.Extensions.Options;
 
 namespace Taipi.Core.Exceptions;
+
 /// <summary>
 /// 处理 <see cref="ForbiddenException"/> 禁止访问异常。
 /// </summary>
@@ -13,9 +14,10 @@ namespace Taipi.Core.Exceptions;
 ///   <item><description>直接透传异常消息（权限消息始终面向用户，不经过环境判断）</description></item>
 /// </list>
 /// </remarks>
-public class ForbiddenHandler : ExceptionHandlerBase<ForbiddenException>
+public class ForbiddenExceptionHandler : ExceptionHandlerBase<ForbiddenException>
 {
-    public ForbiddenHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
+    public ForbiddenExceptionHandler(IOptions<ExceptionHandlingOptions> options) : base(options) { }
+
     /// <summary>
     /// 处理 ForbiddenException 异常
     /// </summary>
